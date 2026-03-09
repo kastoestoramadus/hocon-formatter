@@ -8,5 +8,10 @@ lazy val root = project
 
     scalaVersion := scala3Version,
 
-    libraryDependencies += "org.scalameta" %% "munit" % "1.2.4" % Test
+    libraryDependencies ++= Seq(
+      "org.ekrich" %% "sconfig" % "1.12.4",
+      "com.github.scopt" %%"scopt" % "4.0.1",
+      "org.scala-lang.modules" %% "scala-parallel-collections" % "1.2.0",
+      "org.scalameta" %% "munit" % "1.2.4" % Test
+    )
   )
