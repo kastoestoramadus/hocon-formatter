@@ -17,6 +17,10 @@ class HoconFormatterSpec extends munit.FunSuite {
       """test01 {
         |  include required("test01a"),
         |  include "test02"
+        |},
+        |test02 {
+        |  include "test01c.conf",
+        |  include "test02.conf"
         |}
         |""".stripMargin
     )
@@ -33,7 +37,7 @@ class HoconFormatterSpec extends munit.FunSuite {
         |test01 {
         |  in-string: " include I am not"
         |}
-        |in-multi-line-string: "\ninclude iam.not\n"
+        |in-multi-line-string: "\ninclude iam.not\ninclude\niam.not\ninclude\n\n\niam.not"
         |# another include I am not
         |include "test03-included.conf"
         |""".stripMargin
@@ -50,8 +54,6 @@ class HoconFormatterSpec extends munit.FunSuite {
       """test01 {
         |  include "test01b","booleans" : 42 // valid but not formated
         |}
-        |# unsupported, include can't in multi lines
-        |test02 {}
         |""".stripMargin
     )
   }

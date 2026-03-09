@@ -55,7 +55,7 @@ object HoconFormatter {
             .render(renderOptions)
       formatted
         .replaceAll(
-          "__REMOVE7: ME, # __INCLUDE",
+          "__REMOVE\\d+: ME, # __INCLUDE",
           "include"
         ) // walkaround for in quotes
         .replaceAll("\n\\s*__REMOVE\\d+: ME", "")
