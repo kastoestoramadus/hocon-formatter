@@ -10,7 +10,10 @@ import scopt.OptionParser
 
 object CmdApi {
 
-  case class InputArguments(files: List[String] = Nil, checkOnly: Boolean = false)
+  case class InputArguments(
+      files: List[String] = Nil,
+      checkOnly: Boolean = false
+  )
 
   def main(args: Array[String]): Unit = {
     val parser = new OptionParser[InputArguments]("hocon-formatter") {
@@ -32,8 +35,10 @@ object CmdApi {
     }
 
     parser.parse(args, InputArguments()) match {
-      case None         =>
-        throw new IllegalArgumentException(s"""Error in parsing arguments : ${args.mkString(" ")}""".stripMargin)
+      case None =>
+        throw new IllegalArgumentException(
+          s"""Error in parsing arguments : ${args.mkString(" ")}""".stripMargin
+        )
       case Some(inputs) =>
         executeFormatting(inputs)
     }
@@ -55,7 +60,7 @@ object CmdApi {
               sys.exit(-1)
             } else print(".")
           } else replaceContent(file, formatted)
-        case Failure(_)         =>
+        case Failure(_) =>
           println(s"ERROR: failed to parse, skipping: $debugInfo . ")
       }
     }

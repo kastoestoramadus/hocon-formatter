@@ -29,28 +29,36 @@ object HoconFormatter {
 
   def format(confStr: String): Try[String] =
     Try {
-      val preprocessed = confStr.split("\n").zipWithIndex.map {
-        (line, idx) =>
-          val forLineChecks = " " + line.takeWhile(_ != '#').replaceAll("""//.*$""","")
+      val preprocessed = confStr
+        .split("\n")
+        .zipWithIndex
+        .map { (line, idx) =>
+          val forLineChecks =
+            " " + line.takeWhile(_ != '#').replaceAll("""//.*$""", "")
           // adding " " is a trick for newline include
-          if ( forLineChecks.contains(" include ") )
+          if (forLineChecks.contains(" include "))
             // second entry to keep place for comment with include
             s"__REMOVE$idx: ME," + line.replace("include ", s"# __INCLUDE ")
           else line
-      }.mkString("\n")
+        }
+        .mkString("\n")
 
       // throw exception if not parsable
       ConfigFactory.parseString(preprocessed, parseOptions)
 
       // println(preprocessed)
       val parsed = ConfigFactory.parseString(preprocessed, parseOptions)
-      val formatted = if (parsed.isEmpty) "" // without it, it produced "{}"
-      else
-        parsed.root
-          .render(renderOptions)
+      val formatted =
+        if (parsed.isEmpty) "" // without it, it produced "{}"
+        else
+          parsed.root
+            .render(renderOptions)
       formatted
-        .replaceAll("__REMOVE7: ME, # __INCLUDE","include") // walkaround for in quotes
-        .replaceAll("\n\\s*__REMOVE\\d+: ME","")
-        .replaceAll("# __INCLUDE","include")
+        .replaceAll(
+          "__REMOVE7: ME, # __INCLUDE",
+          "include"
+        ) // walkaround for in quotes
+        .replaceAll("\n\\s*__REMOVE\\d+: ME", "")
+        .replaceAll("# __INCLUDE", "include")
     }
 }
