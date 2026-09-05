@@ -3,8 +3,9 @@ name: CI
 on:
   push:
     branches: [main]
+  # No branch filter: every pull request is verified, including ones stacked on
+  # another feature branch. Pushes are limited to main so a PR branch is not built twice.
   pull_request:
-    branches: [main]
 
 # A newer push to the same branch supersedes an in-flight run.
 concurrency:
