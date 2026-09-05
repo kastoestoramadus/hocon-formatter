@@ -37,3 +37,9 @@ metals.sbt
 
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
+
+# Claude Code — project settings are shared, local overrides are personal
+.claude/settings.local.json
+
+# scala-cli
+.scala-build/

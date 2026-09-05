@@ -26,7 +26,7 @@ object HoconFormatter {
 
   private def isInsideString(str: String, pos: Int): Boolean = {
     var inString = false
-    var i = 0
+    var i        = 0
     while (i < pos && i < str.length) {
       val c = str.charAt(i)
       if (c == '"') {
@@ -44,9 +44,9 @@ object HoconFormatter {
 
   private def replaceNonQuotedIncludeKeywordsWithPlaceholder(str: String): String = {
     val includePattern = Pattern.compile("""(?<!\w)include\s+""")
-    val matcher = includePattern.matcher(str)
-    val result = new StringBuffer()
-    var idx = 0
+    val matcher        = includePattern.matcher(str)
+    val result         = new StringBuffer()
+    var idx            = 0
     while (matcher.find()) {
       val matchStart = matcher.start()
       if (!isInsideString(str, matchStart)) {
@@ -68,14 +68,14 @@ object HoconFormatter {
 
   def format(confStr: String): Try[String] =
     Try {
-      val preprocessed = 
+      val preprocessed =
         replaceNonQuotedIncludeKeywordsWithPlaceholder(confStr)
 
       // throw exception if not parsable
       ConfigFactory.parseString(preprocessed, parseOptions)
 
       // println(preprocessed)
-      val parsed = ConfigFactory.parseString(preprocessed, parseOptions)
+      val parsed    = ConfigFactory.parseString(preprocessed, parseOptions)
       val formatted =
         if (parsed.isEmpty) "" // without it, it produced "{}"
         else
