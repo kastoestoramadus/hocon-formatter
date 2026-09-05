@@ -65,22 +65,36 @@ class IncludeDetectionSpec extends munit.FunSuite {
     }
   }
 
-  // --- Documented limitations ------------------------------------------------------------------
-  // These pin down today's behaviour, not desired behaviour. They are expected to fail once the
-  // same-line include handling is solved, which is the signal that the limitation is gone.
+  // --- An include may share its line with other content ----------------------------------------
+  // The preprocessing used to comment out the rest of the line, which swallowed closing braces
+  // and any entries following the include.
 
-  test("LIMITATION: an include sharing its line with a closing brace fails to parse") {
-    assert(
-      format("""o { include "f.conf" }""").isFailure,
-      "same-line include now works - update this test and the note in CLAUDE.md"
-    )
+  test("same line: include inside a one-line object") {
+    val out = format("""o { include "f.conf" }""").get
+    assert(out.contains("""include "f.conf""""), out)
   }
 
-  test("LIMITATION: an include with no whitespace after it is silently dropped") {
-    assertEquals(
-      formatted("""include"f.conf""""),
-      "",
-      "include\"f.conf\" now survives - update this test and the note in CLAUDE.md"
-    )
+  test("same line: entries after an include are formatted, not passed through") {
+    val out = format("""o { include "f.conf", b   :    1 }""").get
+    assert(out.contains("""include "f.conf""""), out)
+    assert(out.contains("b: 1"), s"entry after the include was not formatted: $out")
+  }
+
+  test("same line: closing brace survives so the result re-parses") {
+    val raw = """o { include "f.conf" }"""
+    assert(format(raw).isSuccess, "formatting failed outright")
+    assert(format(format(raw).get).isSuccess, "output does not survive a second pass")
+  }
+
+  test("no whitespace after include is still a directive") {
+    val out = format("""include"f.conf"""").get
+    assert(out.contains("include"), s"the include was silently dropped: [$out]")
+    assert(out.trim.nonEmpty, "output is empty - the include was lost")
+  }
+
+  test("include function forms survive sharing a line") {
+    val out = format("""o { include required(file("f.conf")), b : 1 }""").get
+    assert(out.contains("required"), out)
+    assert(out.contains("b: 1"), out)
   }
 }
