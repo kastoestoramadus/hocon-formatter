@@ -20,23 +20,23 @@ class HoconSpecCoverageSpec extends munit.FunSuite {
     try { ConfigFactory.parseString(s, parseOptions); true }
     catch { case _: Throwable => false }
 
-  // --- Destroyed: format() reports Success while producing unparseable output -----------------
-  // This is worse than a crash: CmdApi would overwrite the source file with the result.
+  // --- Never hand back output we cannot read again ---------------------------------------------
+  // These constructs cannot survive the parse-render round trip. Returning Success with
+  // unparseable output is the worst outcome available, because CmdApi writes on success:
+  // rewrite mode would replace a valid config with a broken one. Refusing is correct.
 
-  private val destroyed = Map(
+  private val mustRefuse = Map(
     "+= field separator"            -> "a : [1]\na += 2",
     "+= field separator, nested"    -> "o { a : [1]\na += 2 }",
     "self-referential substitution" -> "a : 1\na : ${a}"
   )
 
-  destroyed.foreach { case (name, raw) =>
-    test(s"DESTROYED: $name") {
-      assert(parses(raw), s"fixture itself must be valid HOCON: $raw")
-      val out = format(raw)
-      assert(out.isSuccess, s"formatting unexpectedly failed for: $raw")
+  mustRefuse.foreach { case (name, raw) =>
+    test(s"refuses rather than corrupts: $name") {
+      assert(parses(raw), s"the fixture itself must be valid HOCON: $raw")
       assert(
-        !parses(out.get),
-        s"$name now round-trips - remove it from the destroyed list and from CLAUDE.md"
+        format(raw).isFailure,
+        s"$name: formatter reported success but the output cannot be parsed back"
       )
     }
   }

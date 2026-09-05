@@ -37,23 +37,33 @@ Two files carry the logic:
   `ConfigRenderOptions` + `ConfigFormatOptions`.
 - **`CmdApi`** — scopt CLI, processes files in parallel, chooses between `--check` and in-place rewrite.
 
-### The include workaround — read this before touching `HoconFormatter`
+### The include masking — read this before touching `HoconFormatter`
 
 Parsing a HOCON file resolves and discards its `include` directives, so they cannot survive a plain
-parse-then-render round trip. The formatter masks them instead:
+parse-then-render round trip. Each **whole include statement** is swapped for a placeholder field
+before parsing and swapped back afterwards:
 
-1. `replaceNonQuotedIncludeKeywordsWithPlaceholder` rewrites every non-quoted `include ` into a
-   marker `__REMOVE<n>: ME, # __INCLUDE `. The index `<n>` keeps markers unique, and making it a
-   real field forces the renderer to preserve its position.
+1. `maskIncludes` scans for `include` at a word boundary, outside a string, and works out the
+   extent of the statement — a quoted target, or `required(...)` / `file(...)` / `url(...)` /
+   `classpath(...)` with balanced parentheses. Anything else (`include_path`, the word `include` in
+   prose) is left alone. The statement is replaced by `__INCLUDE_<n>` plus a guard field, and the
+   original text is kept in a side table keyed by `<n>`.
 2. sconfig parses and renders the masked text.
-3. Three `replaceAll` passes turn the markers back into `include`.
+3. `unmaskIncludes` puts the original statements back and drops the guard fields.
 
-`isInsideString` exists so the word `include` appearing inside a string or comment is left alone.
+**Why a guard field:** `setSimplifyNestedObjects` collapses a single-field object into a dotted
+path, so `o { __INCLUDE_0: v }` would become `o.__INCLUDE_0: v` — moving the placeholder key out of
+its object and making it unrestorable. A second field keeps the object from collapsing.
 
-**Why it looks like this:** the author contributed formatting support to sconfig upstream, but the
+**Why the whole statement and not just the keyword:** the previous scheme replaced `include ` with
+a marker followed by a `#` line comment, which swallowed everything after it on that line — a
+closing brace, or entries following the include. Replacing the whole statement comments out
+nothing, so an include may share its line with other content.
+
+**Why any of this exists:** the author contributed formatting support to sconfig upstream, but the
 deeper fixes needed here were too invasive to land in that library. The remaining gaps are worked
-around in this repo instead. The placeholder scheme is load-bearing, not accidental cruft — treat a
-change to it as a change to the core algorithm.
+around in this repo instead. The masking is load-bearing, not accidental cruft — treat a change to
+it as a change to the core algorithm.
 
 ### Regex constraint: no lookaround
 
@@ -68,43 +78,30 @@ start.
 
 ## Known limitations
 
-### Destroyed input — the serious ones
+### Constructs the formatter refuses
 
-`format` returns `Success` while producing output that does not parse. Because `CmdApi` writes on
-success, running the tool in rewrite mode replaces a valid file with an unparseable one.
+Some valid HOCON cannot survive the parse-render round trip, because sconfig renders an unresolved
+merge as a comment block that says in its own text that it will not be parseable. Rather than hand
+that back, `format` verifies its own output and returns a `Failure`, so `CmdApi` leaves the file
+untouched:
 
 - **`+=` field separator** (`a : [1]` then `a += 2`), at the root and nested.
 - **Self-referential substitution** (`a : 1` then `a : ${a}`).
 
-Both are valid HOCON per the spec. The cause is the same: sconfig renders an unresolved merge as a
-comment block that says in its own text that it will not be parseable. Pinned in
-`HoconSpecCoverageSpec` under `DESTROYED:`.
+Supporting these properly would need the same masking treatment `include` gets. Pinned in
+`HoconSpecCoverageSpec` under `refuses rather than corrupts`.
 
-### Same-line includes
-
-Everything after an `include` on the same line is swallowed by the `# __INCLUDE` comment the
-preprocessing inserts:
-
-- `o { include "f.conf" }` — fails to parse, the closing brace is commented out.
-- `include "x","y" : 42` — passes through unformatted (this is `test03.conf`).
-- `include"f.conf"` with no whitespace — silently produces empty output; the include is lost.
-
-This is an unsolved problem, not a design decision — no approach was found that handles every
-`include` case while still formatting same-line entries after a comma. Solving it makes these
-limitations obsolete and turns the pinned tests red, which is the intended signal.
-
-### CLI exit path
-
-`CmdApi` calls `sys.exit(-1)` from inside a parallel `foreach`. The shell sees exit code 255, and
-the JVM dies mid-iteration, so in `--check` mode some files may never be examined.
+The check only rejects a syntax error in the output. Output containing `include required("x")`
+throws while *resolving* includes, which says nothing about the text being well formed, so that is
+allowed through.
 
 ### Intentional normalisations — do not "fix" these
 
 Meaning is preserved, original spelling is not. Pinned in `HoconSpecCoverageSpec`:
 `//` comments become `#`; `=` becomes `:`; nested objects are flattened to path keys
 (`setSimplifyNestedObjects`); triple-quoted strings become escaped single-line strings; number
-literals are canonicalised (`1.5e3` becomes `1500`); unicode escapes are resolved (a `\u0041` escape
-becomes the literal `A`).
+literals are canonicalised (`1.5e3` becomes `1500`); unicode escapes are resolved (a `\u0041`
+escape becomes the literal `A`).
 
 ## Tests
 
@@ -117,11 +114,13 @@ Four suites, split by concern so a change answers to one place:
 - **`HoconFormatterInvariantsSpec`** — relations holding for every fixture: idempotence
   (`format(format(x)) == format(x)`), output re-parses, meaning preservation
   (`parse(raw) == parse(format(raw))`), and adversarial inputs shaped like the internal
-  `__REMOVE<n>: ME` markers.
+  `__INCLUDE_<n>` and `__INCLUDE_GUARD_<n>` fields.
 - **`IncludeDetectionSpec`** — which occurrences of the word `include` are a directive and which
   are ordinary text. This is the contract of the detection regex; change that regex and answer here.
-- **`HoconSpecCoverageSpec`** — coverage against the HOCON specification: what is destroyed, what is
+- **`HoconSpecCoverageSpec`** — coverage against the HOCON specification: what is refused, what is
   normalised on purpose, what is supported.
+- **`CmdApiSpec`** — CLI behaviour on temp files: exit codes, that every file is examined, and that
+  a file the formatter cannot handle is never overwritten.
 
 Meaning preservation is asserted only on include-free inputs: `test01.conf` contains
 `include required("test01a")` pointing at a file that does not exist, so the raw input cannot be

@@ -65,19 +65,19 @@ class HoconFormatterInvariantsSpec extends munit.FunSuite {
     }
   }
 
-  // Adversarial: the preprocessing injects "__REMOVEn: ME" markers into the source.
-  // Content that already looks like a marker must not be mistaken for one.
-  // The dangerous post-processing regex is "\n\s*__REMOVEd+: ME", so a marker at the
-  // start of a line is the shape that could actually be swallowed.
+  // Adversarial: the masking injects `__INCLUDE_<n>` and `__INCLUDE_GUARD_<n>` fields into the
+  // source. Content that already looks like one must not be mistaken for the real thing.
   private val markerCases = Map(
-    "as a value"                 -> """key : "__REMOVE0: ME"""",
-    "at start of line"           -> "a : 1\n\"__REMOVE0: ME\" : 2",
-    "inside a multi-line string" -> "s : \"\"\"\n__REMOVE0: ME\n\"\"\"",
-    "bare marker line"           -> "__REMOVE0 : \"ME\"\nb : 2"
+    "placeholder as a value"      -> """key : "__INCLUDE_0"""",
+    "placeholder as a key"        -> """"__INCLUDE_0" : 1""",
+    "full placeholder field"      -> """__INCLUDE_0 : "__INCLUDE_0"""",
+    "guard field"                 -> """__INCLUDE_GUARD_0 : "g"""",
+    "guard field, unquoted value" -> """__INCLUDE_GUARD_0 : g""",
+    "inside a multi-line string"  -> "s : \"\"\"\n__INCLUDE_0\n\"\"\""
   )
 
   markerCases.foreach { case (name, raw) =>
-    test(s"placeholder text is not mistaken for a marker: $name") {
+    test(s"marker-like input is not mistaken for a marker: $name") {
       val formatted = format(raw).get
       assertEquals(
         ConfigFactory.parseString(formatted, parseOptions),
