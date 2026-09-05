@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A newer push to the same branch supersedes an in-flight run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: sbt
+
+      # ubuntu-24.04 runners no longer ship sbt.
+      - name: Set up sbt
+        uses: sbt/setup-sbt@v1
+
+      - name: Compile and test
+        run: sbt test
+
+      # Runs even when the tests fail, so one run reports both signals.
+      - name: Check formatting
+        if: ${{ !cancelled() }}
+        run: sbt scalafmtCheckAll
