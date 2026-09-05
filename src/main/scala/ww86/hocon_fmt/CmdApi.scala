@@ -40,29 +40,56 @@ object CmdApi {
           s"""Error in parsing arguments : ${args.mkString(" ")}""".stripMargin
         )
       case Some(inputs) =>
-        executeFormatting(inputs)
+        sys.exit(executeFormatting(inputs))
     }
   }
 
-  def executeFormatting(inputs: InputArguments): Unit = {
+  /** Outcome of examining one file. */
+  enum Outcome {
+    case Rewritten(path: String)
+    case AlreadyFormatted(path: String)
+    case NeedsFormatting(path: String, formatted: String)
+    case Unformattable(path: String, reason: String)
+  }
+
+  /** Examines every file, then reports once. Returns the process exit code.
+    *
+    * Every file is examined even if an earlier one is unformatted. Exiting from inside the
+    * parallel loop used to kill the JVM mid-iteration, so in --check mode some files were
+    * never looked at, and the reports of the ones that were raced each other onto stdout.
+    */
+  def executeFormatting(inputs: InputArguments): Int = {
     val files = inputs.files.map(new File(_))
     println(s"Running HOCON formatter for ${files.length} files.")
 
-    files.par.foreach { file =>
-      val debugInfo = file.getCanonicalPath
-      HoconFormatter.fmtFileToStr(file) match {
-        case Success(formatted) =>
-          if (inputs.checkOnly) {
-            val before = readStringFrom(file.toPath)
-            if (formatted != before) {
-              println(s"Found a not formatted file: $debugInfo .")
-              println(s"After formatting:\n$formatted\n")
-              sys.exit(-1)
-            } else print(".")
-          } else replaceContent(file, formatted)
-        case Failure(_) =>
-          println(s"ERROR: failed to parse, skipping: $debugInfo . ")
-      }
+    val outcomes = files.par.map(examine(_, inputs.checkOnly)).toList
+
+    outcomes.foreach {
+      case Outcome.Unformattable(path, reason) =>
+        println(s"ERROR: cannot format, leaving unchanged: $path ($reason)")
+      case Outcome.NeedsFormatting(path, formatted) =>
+        println(s"Found a not formatted file: $path .")
+        println(s"After formatting:\n$formatted\n")
+      case Outcome.AlreadyFormatted(_) => print(".")
+      case Outcome.Rewritten(_)        => ()
+    }
+
+    // 1, not -1: an exit status is a byte, so -1 reaches the shell as 255.
+    if (outcomes.exists(_.isInstanceOf[Outcome.NeedsFormatting])) 1 else 0
+  }
+
+  private def examine(file: File, checkOnly: Boolean): Outcome = {
+    val path = file.getCanonicalPath
+    HoconFormatter.fmtFileToStr(file) match {
+      case Success(formatted) =>
+        if (checkOnly) {
+          if (formatted != readStringFrom(file.toPath)) Outcome.NeedsFormatting(path, formatted)
+          else Outcome.AlreadyFormatted(path)
+        } else {
+          replaceContent(file, formatted)
+          Outcome.Rewritten(path)
+        }
+      case Failure(e) => Outcome.Unformattable(path, e.getMessage.take(120))
     }
   }
 
