@@ -43,7 +43,7 @@ object HoconFormatter {
   }
 
   private def replaceNonQuotedIncludeKeywordsWithPlaceholder(str: String): String = {
-    val includePattern = Pattern.compile("""(?<!\w)include\s+""")
+    val includePattern = Pattern.compile("""\binclude\s+""")
     val matcher        = includePattern.matcher(str)
     val result         = new StringBuffer()
     var idx            = 0
