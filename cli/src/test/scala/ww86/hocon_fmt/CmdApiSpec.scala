@@ -7,30 +7,27 @@ import java.nio.file.Files
 import ww86.hocon_fmt.CmdApi.InputArguments
 
 /** CLI behaviour: exit codes, and that every file is examined. */
-class CmdApiSpec extends munit.FunSuite {
+class CmdApiSpec extends munit.FunSuite with HoconTestSupport {
 
-  private val tmp = FunFixture[File](
+  val tmp = FunFixture[File](
     setup = _ => Files.createTempDirectory("hocon-fmt").toFile,
     teardown = dir => { dir.listFiles().foreach(_.delete()); dir.delete() }
   )
 
-  private def write(dir: File, name: String, content: String): File = {
+  def write(dir: File, name: String, content: String): File = {
     val f = new File(dir, name)
     Files.write(f.toPath, content.getBytes(StandardCharsets.UTF_8))
     f
   }
 
-  private def read(f: File): String =
-    String(Files.readAllBytes(f.toPath), StandardCharsets.UTF_8)
-
-  private def runCapturing(args: InputArguments): (Int, String) = {
+  def runCapturing(args: InputArguments): (Int, String) = {
     val buf  = new ByteArrayOutputStream()
-    val code = Console.withOut(buf)(CmdApi.executeFormatting(args))
+    val code = Console.withOut(buf)(CmdApi.examineAll(args))
     (code, buf.toString(StandardCharsets.UTF_8))
   }
 
-  private val unformatted = "a   :    1"
-  private val formatted   = "a: 1\n"
+  val unformatted = "a   :    1"
+  val formatted   = "a: 1\n"
 
   tmp.test("--check reports exit code 1 for an unformatted file") { dir =>
     val f         = write(dir, "a.conf", unformatted)
@@ -47,7 +44,7 @@ class CmdApiSpec extends munit.FunSuite {
   tmp.test("--check leaves the file on disk untouched") { dir =>
     val f = write(dir, "a.conf", unformatted)
     runCapturing(InputArguments(List(f.getPath), checkOnly = true))
-    assertEquals(read(f), unformatted)
+    assertEquals(CmdApi.readFile(f.toPath), unformatted)
   }
 
   // The defect: sys.exit fired from inside a parallel foreach, so the JVM died at the first
@@ -65,7 +62,7 @@ class CmdApiSpec extends munit.FunSuite {
     val f         = write(dir, "a.conf", unformatted)
     val (code, _) = runCapturing(InputArguments(List(f.getPath), checkOnly = false))
     assertEquals(code, 0)
-    assertEquals(read(f), formatted)
+    assertEquals(CmdApi.readFile(f.toPath), formatted)
   }
 
   // Safety: a file the formatter cannot handle must never be overwritten.
@@ -73,7 +70,7 @@ class CmdApiSpec extends munit.FunSuite {
     val broken      = "a : ${"
     val f           = write(dir, "a.conf", broken)
     val (code, out) = runCapturing(InputArguments(List(f.getPath), checkOnly = false))
-    assertEquals(read(f), broken)
+    assertEquals(CmdApi.readFile(f.toPath), broken)
     assertEquals(code, 0)
     assert(out.contains("cannot format, leaving unchanged"), out)
   }

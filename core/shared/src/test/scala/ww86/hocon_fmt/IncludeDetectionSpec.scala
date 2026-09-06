@@ -1,7 +1,5 @@
 package ww86.hocon_fmt
 
-import org.ekrich.config.{ConfigFactory, ConfigParseOptions}
-
 import ww86.hocon_fmt.HoconFormatter.*
 
 /** Which occurrences of the word `include` are treated as a directive and which are ordinary text.
@@ -9,15 +7,11 @@ import ww86.hocon_fmt.HoconFormatter.*
   * This is the contract of the include-detection regex, isolated from rendering and from the
   * whole-file invariants, so a change to that regex has one place to answer to.
   */
-class IncludeDetectionSpec extends munit.FunSuite {
-
-  private val parseOptions = ConfigParseOptions.defaults.setAllowMissing(true)
-
-  private def formatted(raw: String): String = format(raw).get
+class IncludeDetectionSpec extends munit.FunSuite with HoconTestSupport {
 
   // --- A directive is recognised and survives formatting -------------------------------------
 
-  private val directives = Map(
+  val directives = Map(
     "plain"              -> """include "f.conf"""",
     "required"           -> """include required("f.conf")""",
     "leading whitespace" -> """   include "f.conf""""
@@ -25,10 +19,11 @@ class IncludeDetectionSpec extends munit.FunSuite {
 
   directives.foreach { case (name, raw) =>
     test(s"directive is preserved: $name") {
-      assert(
-        formatted(raw).contains("include"),
-        s"the include directive disappeared from the output of: $raw"
-      )
+      val out = formatted(raw)
+      assert(out.contains("include"), s"the include directive disappeared from the output of: $raw")
+      // This is where placeholders actually get emitted, so this is where a failure to put the
+      // original statement back, or to drop the guard field, shows up.
+      assert(!out.contains("__INCLUDE"), s"placeholder leaked into the output: $out")
     }
   }
 
@@ -42,7 +37,7 @@ class IncludeDetectionSpec extends munit.FunSuite {
   // Third element is text that must survive verbatim, so mangling is caught even where
   // parse-equality alone would not notice (comments carry no meaning to compare).
 
-  private val notDirectives = List(
+  val notDirectives = List(
     ("suffix of a key", """my_include : 1""", "my_include"),
     ("glued prefix", """reinclude : 1""", "reinclude"),
     ("after underscore", """_include : 1""", "_include"),
@@ -56,12 +51,8 @@ class IncludeDetectionSpec extends munit.FunSuite {
     test(s"not a directive: $name") {
       val out = formatted(raw)
       assert(out.contains(mustSurvive), s"expected [$mustSurvive] to survive, got: $out")
-      assert(!out.contains("__REMOVE"), s"placeholder leaked into the output: $out")
-      assertEquals(
-        ConfigFactory.parseString(out, parseOptions),
-        ConfigFactory.parseString(raw, parseOptions),
-        s"meaning changed for: $raw"
-      )
+      assert(!out.contains("__INCLUDE"), s"placeholder leaked into the output: $out")
+      assertSameMeaning(out, raw, s"meaning changed for: $raw")
     }
   }
 
@@ -70,12 +61,12 @@ class IncludeDetectionSpec extends munit.FunSuite {
   // and any entries following the include.
 
   test("same line: include inside a one-line object") {
-    val out = format("""o { include "f.conf" }""").get
+    val out = formatted("""o { include "f.conf" }""")
     assert(out.contains("""include "f.conf""""), out)
   }
 
   test("same line: entries after an include are formatted, not passed through") {
-    val out = format("""o { include "f.conf", b   :    1 }""").get
+    val out = formatted("""o { include "f.conf", b   :    1 }""")
     assert(out.contains("""include "f.conf""""), out)
     assert(out.contains("b: 1"), s"entry after the include was not formatted: $out")
   }
@@ -83,17 +74,17 @@ class IncludeDetectionSpec extends munit.FunSuite {
   test("same line: closing brace survives so the result re-parses") {
     val raw = """o { include "f.conf" }"""
     assert(format(raw).isSuccess, "formatting failed outright")
-    assert(format(format(raw).get).isSuccess, "output does not survive a second pass")
+    assert(format(formatted(raw)).isSuccess, "output does not survive a second pass")
   }
 
   test("no whitespace after include is still a directive") {
-    val out = format("""include"f.conf"""").get
+    val out = formatted("""include"f.conf"""")
     assert(out.contains("include"), s"the include was silently dropped: [$out]")
     assert(out.trim.nonEmpty, "output is empty - the include was lost")
   }
 
   test("include function forms survive sharing a line") {
-    val out = format("""o { include required(file("f.conf")), b : 1 }""").get
+    val out = formatted("""o { include required(file("f.conf")), b : 1 }""")
     assert(out.contains("required"), out)
     assert(out.contains("b: 1"), out)
   }
