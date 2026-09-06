@@ -20,6 +20,12 @@ trait HoconTestSupport { self: munit.FunSuite =>
 
     /** Parsed but not resolved. Two configs are equal when they mean the same thing, so this is
       * the unit of comparison for "formatting did not change the meaning".
+      *
+      * Deliberately raw: SconfigDefectsSpec needs the library's own behaviour, unmasked. That
+      * means text containing an `include` must not be passed to this from a shared suite —
+      * sconfig's Scala.js build cannot parse one at all. Masking here instead would fix that and
+      * cost more than it saves: every include would collapse to the same placeholder, so two
+      * configs including different files would compare equal.
       */
     def parsedConfig: Config = ConfigFactory.parseString(hocon, HoconFormatter.parseOptions)
 

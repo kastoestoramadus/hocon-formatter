@@ -1,7 +1,5 @@
 package ww86.hocon_fmt
 
-import org.ekrich.config.{ConfigFactory, ConfigParseOptions}
-
 import ww86.hocon_fmt.HoconFormatter.*
 
 /** Coverage of the HOCON specification, as seen through `HoconFormatter.format`.

@@ -2,6 +2,7 @@ package ww86.hocon_fmt
 
 import org.ekrich.config.*
 import scala.util.Try
+import scala.util.control.NonFatal
 
 /** Formats HOCON text.
   *
@@ -81,7 +82,7 @@ object HoconFormatter {
   private def refuseUnlessFixedPoint(formatted: String): Unit = {
     val secondPass =
       try formatOnce(formatted)
-      catch { case e: Throwable => refuse(s"output cannot be formatted again: ${e.getMessage}", e) }
+      catch { case NonFatal(e) => refuse(s"output cannot be formatted again: ${e.getMessage}", e) }
 
     if (secondPass != formatted)
       refuse("a second formatting pass would change the output again")

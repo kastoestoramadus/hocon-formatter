@@ -1,7 +1,5 @@
 package ww86.hocon_fmt
 
-import org.ekrich.config.{ConfigFactory, ConfigParseOptions}
-
 import ww86.hocon_fmt.HoconFormatter.*
 
 /** Which occurrences of the word `include` are treated as a directive and which are ordinary text.
@@ -21,10 +19,11 @@ class IncludeDetectionSpec extends munit.FunSuite with HoconTestSupport {
 
   directives.foreach { case (name, raw) =>
     test(s"directive is preserved: $name") {
-      assert(
-        formatted(raw).contains("include"),
-        s"the include directive disappeared from the output of: $raw"
-      )
+      val out = formatted(raw)
+      assert(out.contains("include"), s"the include directive disappeared from the output of: $raw")
+      // This is where placeholders actually get emitted, so this is where a failure to put the
+      // original statement back, or to drop the guard field, shows up.
+      assert(!out.contains("__INCLUDE"), s"placeholder leaked into the output: $out")
     }
   }
 
@@ -52,7 +51,7 @@ class IncludeDetectionSpec extends munit.FunSuite with HoconTestSupport {
     test(s"not a directive: $name") {
       val out = formatted(raw)
       assert(out.contains(mustSurvive), s"expected [$mustSurvive] to survive, got: $out")
-      assert(!out.contains("__REMOVE"), s"placeholder leaked into the output: $out")
+      assert(!out.contains("__INCLUDE"), s"placeholder leaked into the output: $out")
       assertSameMeaning(out, raw, s"meaning changed for: $raw")
     }
   }
