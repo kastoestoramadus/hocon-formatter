@@ -79,4 +79,12 @@ class HoconFormatterInvariantsSpec extends munit.FunSuite with HoconTestSupport 
     val out = formatted("include \"a.conf\"\nx { __INCLUDE_0 : \"__INCLUDE_01\", y : 1 }")
     assert(out.contains("__INCLUDE_01"), s"the field was taken for a placeholder: $out")
   }
+
+  // Rendered, the comment runs straight into the placeholder on the next line, so a near miss
+  // whose value is the real placeholder's key must not use it up.
+  test("marker-like input does not hide a real placeholder right after it") {
+    val out = formatted("# note __INCLUDE_5 :\ninclude \"a.conf\"\nb : 1")
+    assert(out.contains("include \"a.conf\""), s"the include was lost: $out")
+    assert(!out.contains("__INCLUDE_0"), s"placeholder leaked into the output: $out")
+  }
 }
