@@ -1,0 +1,6 @@
+> hoconFormat
+$ must-mirror conf/app.conf expected/app.conf
+
+# The override replaces the default set rather than adding to it.
+$ must-mirror src/main/resources/application.conf original/application.conf
+> hoconFormatCheck

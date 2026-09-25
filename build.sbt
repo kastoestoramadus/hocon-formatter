@@ -45,7 +45,7 @@ def announceRuntime(label: String): Setting[?] =
 lazy val root = project
   .in(file("."))
   // Aggregation drives compile, scalafmt and the rest.
-  .aggregate(coreJVM, coreJS, coreNative, cliJVM, cliJS, cliNative)
+  .aggregate(coreJVM, coreJS, coreNative, cliJVM, cliJS, cliNative, sbtPlugin)
   .settings(
     name := "hocon-formatter",
     publish / skip := true,
@@ -145,3 +145,22 @@ addCommandAlias(
     .mkString("; ")
 )
 addCommandAlias("libraryDefects", "coreJVM/testOnly ww86.hocon_fmt.SconfigDefectsSpec")
+
+/** The sbt 1.x plugin. sbt loads plugins with Scala 2.12, which cannot link against this Scala 3
+  * build, so the plugin resolves the core at run time and calls it through `JvmFacade` in an
+  * isolated class loader, the way sbt-scalafmt runs scalafmt. Its behaviour is covered by the
+  * scripted tests in `sbt-plugin/src/sbt-test`, run with `sbtPluginTest`: each starts a fresh
+  * sbt, which is too slow for the `test` sequence.
+  */
+lazy val sbtPlugin = project
+  .in(file("sbt-plugin"))
+  .enablePlugins(SbtPlugin)
+  .settings(
+    name         := "sbt-hocon-formatter",
+    scalaVersion := "2.12.21",
+    scriptedLaunchOpts += s"-Dplugin.version=${version.value}",
+    // The plugin fetches the core by its coordinates, so scripted needs it published first.
+    scriptedDependencies := scriptedDependencies.dependsOn(coreJVM / publishLocal).value
+  )
+
+addCommandAlias("sbtPluginTest", "sbtPlugin/scripted")
