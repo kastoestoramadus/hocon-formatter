@@ -33,7 +33,8 @@ gradlePlugin {
 val functionalTestSourceSet = sourceSets.create("functionalTest")
 
 dependencies {
-    "functionalTestImplementation"("org.junit.jupiter:junit-jupiter:6.0.1")
+    "functionalTestImplementation"(platform("org.junit:junit-bom:6.0.1"))
+    "functionalTestImplementation"("org.junit.jupiter:junit-jupiter")
     "functionalTestRuntimeOnly"("org.junit.platform:junit-platform-launcher")
 }
 
