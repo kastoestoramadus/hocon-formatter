@@ -62,14 +62,15 @@ object CmdApi {
 
   private def examine(file: File, checkOnly: Boolean): Outcome = {
     val path = file.getCanonicalPath
-    formatFile(file) match {
-      case Failure(e)                       => Outcome.Unformattable(path, e.getMessage.take(120))
-      case Success(formatted) if !checkOnly =>
+    Try(Files.readAllBytes(file.toPath)).map(Verdict.of) match {
+      case Failure(e)                                               => Outcome.Unformattable(path, e.getMessage)
+      case Success(Verdict.Refused(refusal))                        => Outcome.Unformattable(path, refusal.reason.take(120))
+      case Success(Verdict.AlreadyFormatted)                        => Outcome.AlreadyFormatted(path)
+      case Success(Verdict.NeedsFormatting(formatted)) if checkOnly =>
+        Outcome.NeedsFormatting(path, formatted)
+      case Success(Verdict.NeedsFormatting(formatted)) =>
         overwrite(file, formatted)
         Outcome.Rewritten(path)
-      case Success(formatted) if formatted != readFile(file.toPath) =>
-        Outcome.NeedsFormatting(path, formatted)
-      case Success(_) => Outcome.AlreadyFormatted(path)
     }
   }
 
@@ -82,9 +83,6 @@ object CmdApi {
     case Outcome.AlreadyFormatted(_) => print(".")
     case Outcome.Rewritten(_)        => ()
   }
-
-  def formatFile(file: File): Try[String] =
-    Try(readFile(file.toPath)).flatMap(HoconFormatter.format)
 
   def readFile(path: Path): String =
     String(Files.readAllBytes(path), StandardCharsets.UTF_8)
