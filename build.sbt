@@ -17,7 +17,7 @@ def announceRuntime(label: String): Setting[?] =
 lazy val root = project
   .in(file("."))
   // Aggregation drives compile, scalafmt and the rest.
-  .aggregate(coreJVM, coreJS, cli)
+  .aggregate(coreJVM, coreJS, coreNative, cli)
   .settings(
     name := "hocon-formatter",
     publish / skip := true,
@@ -29,16 +29,16 @@ lazy val root = project
       .sequential(
         coreJVM / Test / test,
         cli / Test / test,
-        coreJS / Test / test
+        coreJS / Test / test,
+        coreNative / Test / test
       )
       .value
   )
 
 /** Formatting proper: a pure `String => Try[String]` with no file access and no threads, which
-  * is what lets it cross-build. Scala Native is deliberately not a target — its `java.util.regex`
-  * runs on RE2, which rejects the lookaround this code would otherwise want.
+  * is what lets it cross-build.
   */
-lazy val core = crossProject(JVMPlatform, JSPlatform)
+lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Full)
   .in(file("core"))
   .settings(
@@ -52,15 +52,17 @@ lazy val core = crossProject(JVMPlatform, JSPlatform)
     Test / test / testOptions += Tests.Exclude(Seq("ww86.hocon_fmt.SconfigDefectsSpec"))
   )
   .jvmSettings(announceRuntime("core on the JVM"))
-  .jsSettings(
-    announceRuntime("core on Scala.js"),
-    // sconfig declares this `provided`, so a Scala.js consumer has to supply it: sconfig reaches
-    // for java.time, which the Scala.js javalib does not carry.
+  .jsSettings(announceRuntime("core on Scala.js"))
+  .nativeSettings(announceRuntime("core on Scala Native"))
+  .platformsSettings(JSPlatform, NativePlatform)(
+    // sconfig declares this `provided`, so a non-JVM consumer has to supply it: sconfig reaches
+    // for java.time, which neither the Scala.js nor the Scala Native javalib carries.
     libraryDependencies += "org.ekrich" %%% "sjavatime" % sjavatime
   )
 
-lazy val coreJVM = core.jvm
-lazy val coreJS  = core.js
+lazy val coreJVM    = core.jvm
+lazy val coreJS     = core.js
+lazy val coreNative = core.native
 
 /** The command line tool: file access, argument parsing and parallelism, none of which exist on
   * Scala.js. Keeping them here is what keeps `core` portable.
@@ -80,5 +82,8 @@ lazy val cli = project
     )
   )
 
-addCommandAlias("crossCompile", "coreJVM/Test/compile; coreJS/Test/compile; cli/Test/compile")
+addCommandAlias(
+  "crossCompile",
+  "coreJVM/Test/compile; coreJS/Test/compile; coreNative/Test/compile; cli/Test/compile"
+)
 addCommandAlias("libraryDefects", "coreJVM/testOnly ww86.hocon_fmt.SconfigDefectsSpec")
