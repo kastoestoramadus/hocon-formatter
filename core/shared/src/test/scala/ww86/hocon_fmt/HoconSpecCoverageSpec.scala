@@ -1,7 +1,5 @@
 package ww86.hocon_fmt
 
-import ww86.hocon_fmt.HoconFormatter.*
-
 /** Coverage of the HOCON specification, as seen through `HoconFormatter.format`.
   *
   * Everything here exercises our pipeline, so every test is named `formatter:`. Where the
@@ -33,10 +31,10 @@ class HoconSpecCoverageSpec extends munit.FunSuite with HoconTestSupport {
   mustRefuse.foreach { case (name, raw) =>
     test(s"formatter: refuses rather than corrupts: $name") {
       assert(raw.parses.isSuccess, s"the fixture itself must be valid HOCON: $raw")
-      assert(
-        format(raw).isFailure,
-        s"$name: formatter reported success but the output cannot be parsed back"
-      )
+      refusalOf(raw) match {
+        case Refusal.BrokenOutput(_) => ()
+        case other                   => fail(s"$name: refused for the wrong reason: ${other.reason}")
+      }
     }
   }
 
@@ -53,10 +51,7 @@ class HoconSpecCoverageSpec extends munit.FunSuite with HoconTestSupport {
   specSelfReference.foreach { case (name, raw) =>
     test(s"formatter: refuses output that is not a fixed point: $name") {
       assert(raw.parses.isSuccess, s"the fixture itself must be valid HOCON: $raw")
-      assert(
-        format(raw).isFailure,
-        s"$name: output parses but a second pass changes it again"
-      )
+      assertEquals(refusalOf(raw), Refusal.UnstableOutput, s"$name: refused for the wrong reason")
     }
   }
 
