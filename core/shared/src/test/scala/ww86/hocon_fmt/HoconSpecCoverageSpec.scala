@@ -25,7 +25,9 @@ class HoconSpecCoverageSpec extends munit.FunSuite with HoconTestSupport {
   val mustRefuse = Map(
     "+= field separator"            -> "a : [1]\na += 2",
     "+= field separator, nested"    -> "o { a : [1]\na += 2 }",
-    "self-referential substitution" -> "a : 1\na : ${a}"
+    "self-referential substitution" -> "a : 1\na : ${a}",
+    // From the specification's "Array and object concatenation" examples.
+    "array self-concatenation" -> "a : [ 1, 2 ]\na : ${a} [ 3, 4 ]"
   )
 
   mustRefuse.foreach { case (name, raw) =>
@@ -38,14 +40,11 @@ class HoconSpecCoverageSpec extends munit.FunSuite with HoconTestSupport {
     }
   }
 
-  // Examples taken verbatim from the HOCON specification. A repeated key whose later definition
-  // substitutes the earlier one renders as an unresolved-merge banner: it parses, so the
-  // output check passes, but it is not a fixed point - a second pass changes it again.
+  // Taken verbatim from the HOCON specification. The cycle renders as an unresolved-merge
+  // banner: it parses, so the output check passes, but a second pass changes it again.
   val specSelfReference = Map(
     "substitution cycle (Examples of Self-Referential Substitutions)" ->
-      "a : 1\nb : 2\na : ${b}\nb : ${a}",
-    "array self-concatenation (Array and object concatenation)" ->
-      "a : [ 1, 2 ]\na : ${a} [ 3, 4 ]"
+      "a : 1\nb : 2\na : ${b}\nb : ${a}"
   )
 
   specSelfReference.foreach { case (name, raw) =>

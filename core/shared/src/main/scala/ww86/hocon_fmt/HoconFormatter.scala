@@ -2,13 +2,13 @@ package ww86.hocon_fmt
 
 import org.ekrich.config.*
 import scala.util.Try
-import scala.util.control.NonFatal
 
 /** Formats HOCON text.
   *
   * Everything except `include` handling is sconfig's job: this parses, re-renders, and puts the
   * include statements back. When output comes out wrong for any other reason the bug is upstream,
-  * and the response here is to refuse the file rather than work around it — see `SconfigDefectsSpec`.
+  * and the response here is to refuse the file rather than work around it — see [[Refusal]] and
+  * `SconfigDefectsSpec`.
   */
 object HoconFormatter {
 
@@ -29,22 +29,19 @@ object HoconFormatter {
     .setFormatted(true)
     .setConfigFormatOptions(formattingOptions)
 
-  /** Formatted text, or a failure describing why the input was left alone. */
-  def format(source: String): Try[String] =
-    Try {
-      val formatted = formatOnce(source)
-      refuseUnlessValidHocon(formatted)
-      refuseUnlessFixedPoint(formatted)
-      formatted
-    }
+  /** Formatted text, or why the input was left alone. */
+  def format(source: String): Either[Refusal, String] =
+    for {
+      formatted <- attempt(formatOnce(source))(Refusal.NotHocon(_))
+      _         <- readableAgain(formatted)
+      _         <- fixedPoint(formatted)
+    } yield formatted
 
   /** Kept separate from [[format]] so the checks there can run another pass without recursing
-    * back through the checks.
+    * back through the checks. Throws for input that is not HOCON at all.
     */
   private def formatOnce(source: String): String = {
     val masked = IncludeMasking.mask(source)
-
-    // Throws for input that is not HOCON at all, which is how callers learn to skip the file.
     val parsed = ConfigFactory.parseString(masked.text, parseOptions)
 
     val rendered =
@@ -61,33 +58,23 @@ object HoconFormatter {
     * put back verbatim, and resolving them would reach for the filesystem — which says nothing
     * about whether the text is well formed, and which sconfig cannot do at all on Scala.js.
     */
-  private def refuseUnlessValidHocon(formatted: String): Unit =
+  private def readableAgain(formatted: String): Either[Refusal, Unit] =
     try {
       ConfigFactory.parseString(IncludeMasking.mask(formatted).text, parseOptions)
-      ()
+      Right(())
     } catch {
-      case e: ConfigException.Parse =>
-        refuse(s"output is not valid HOCON: ${e.getMessage}", e)
+      case e: ConfigException.Parse => Left(Refusal.BrokenOutput(e.getMessage))
       // An include this masker did not recognise can still reach resolution; that is not a
       // statement about our text either.
-      case _: ConfigException => ()
+      case _: ConfigException => Right(())
     }
 
-  /** A formatter that is not a fixed point keeps producing diffs on unchanged files.
-    *
-    * sconfig renders an unresolved merge — a repeated key whose later definition substitutes the
-    * earlier one — as a comment banner that does parse, so the syntax check above waves it
-    * through even though a second pass grows the text again.
-    */
-  private def refuseUnlessFixedPoint(formatted: String): Unit = {
-    val secondPass =
-      try formatOnce(formatted)
-      catch { case NonFatal(e) => refuse(s"output cannot be formatted again: ${e.getMessage}", e) }
+  /** A formatter that is not a fixed point keeps producing diffs on unchanged files. */
+  private def fixedPoint(formatted: String): Either[Refusal, Unit] =
+    attempt(formatOnce(formatted))(Refusal.BrokenOutput(_))
+      .filterOrElse(_ == formatted, Refusal.UnstableOutput)
+      .map(_ => ())
 
-    if (secondPass != formatted)
-      refuse("a second formatting pass would change the output again")
-  }
-
-  private def refuse(reason: String, cause: Throwable = null): Nothing =
-    throw new IllegalStateException(s"refusing to emit: $reason", cause)
+  private def attempt[A](run: => A)(refusal: String => Refusal): Either[Refusal, A] =
+    Try(run).toEither.left.map(e => refusal(Option(e.getMessage).getOrElse(e.toString)))
 }
