@@ -13,6 +13,27 @@ val munitCatsEffect = "2.2.1"
 ThisBuild / scalaVersion := scala3
 ThisBuild / version      := "0.1.0-SNAPSHOT"
 
+// Coordinates and the metadata Sonatype requires before anything can reach Maven Central,
+// which is what `cs` and therefore the pre-commit coursier hook resolve from.
+ThisBuild / organization         := "io.github.kastoestoramadus"
+ThisBuild / organizationName     := "kastoestoramadus"
+ThisBuild / homepage             := Some(url("https://github.com/kastoestoramadus/hocon-formatter"))
+ThisBuild / licenses             := Seq("GPL-3.0" -> url("https://www.gnu.org/licenses/gpl-3.0.html"))
+ThisBuild / scmInfo := Some(
+  ScmInfo(
+    url("https://github.com/kastoestoramadus/hocon-formatter"),
+    "scm:git:https://github.com/kastoestoramadus/hocon-formatter.git"
+  )
+)
+ThisBuild / developers := List(
+  Developer(
+    "kastoestoramadus",
+    "Waldemar Wosinski",
+    "",
+    url("https://github.com/kastoestoramadus")
+  )
+)
+
 /** sbt prints one unlabelled "Passed: Total N" per aggregated project, and the Scala.js block
   * arrives without the `[info]` prefix, so nothing says which runtime a result came from. The
   * banner goes in a Cleanup hook rather than Setup so it lands next to that project's summary
