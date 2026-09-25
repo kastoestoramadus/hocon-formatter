@@ -1,0 +1,14 @@
+# An already formatted file must not be written at all, so its timestamp is compared against a
+# marker made before the run.
+$ sleep 1000
+$ touch before-format
+$ sleep 1000
+
+> hoconFormat
+$ must-mirror src/main/resources/application.conf expected/application.conf
+$ must-mirror src/test/resources/test-overrides.hocon expected/test-overrides.hocon
+$ must-mirror src/main/resources/already-formatted.conf expected/already-formatted.conf
+-$ newer src/main/resources/already-formatted.conf before-format
+
+# Only *.conf and *.hocon files are HOCON by default.
+$ must-mirror src/main/resources/notes.txt expected/notes.txt

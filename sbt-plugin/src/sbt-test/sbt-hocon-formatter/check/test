@@ -1,0 +1,9 @@
+-> hoconFormatCheck
+
+# Every unformatted file is reported, not only the first one found, and none is written.
+> assertWarnedOnce hoconFormatCheck src/main/resources/first.conf src/main/resources/second.conf
+$ must-mirror src/main/resources/first.conf original/first.conf
+$ must-mirror src/main/resources/second.conf original/second.conf
+
+> hoconFormat
+> hoconFormatCheck

@@ -1,0 +1,6 @@
+# The include directives come back verbatim, at the top level and inside an object.
+> hoconFormat
+$ must-mirror src/main/resources/application.conf expected/application.conf
+$ must-mirror src/main/resources/other.conf expected/other.conf
+$ must-mirror src/main/resources/nested.conf expected/nested.conf
+> hoconFormatCheck
