@@ -72,4 +72,11 @@ class HoconFormatterInvariantsSpec extends munit.FunSuite with HoconTestSupport 
       assertSameMeaning(formatted(raw), raw, s"marker-like content was corrupted: $name")
     }
   }
+
+  // A placeholder's key and value carry the same index, not merely a common prefix: with index 0
+  // handed out, a field whose value is `__INCLUDE_01` is the user's own.
+  test("marker-like input is not mistaken for a marker: value index extends a handed-out one") {
+    val out = formatted("include \"a.conf\"\nx { __INCLUDE_0 : \"__INCLUDE_01\", y : 1 }")
+    assert(out.contains("__INCLUDE_01"), s"the field was taken for a placeholder: $out")
+  }
 }
