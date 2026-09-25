@@ -33,8 +33,13 @@ trait HoconTestSupport { self: munit.FunSuite =>
     def renderedByLibrary: String = hocon.parsedConfig.root.render(HoconFormatter.renderOptions)
   }
 
-  /** Formatted, throwing if the formatter refuses. For the tests that expect success. */
-  def formatted(hocon: String): String = HoconFormatter.format(hocon).get
+  /** Formatted, failing the test if the formatter refuses. For the tests that expect success. */
+  def formatted(hocon: String)(using munit.Location): String =
+    HoconFormatter.format(hocon).fold(refusal => fail(s"refused: ${refusal.reason}"), identity)
+
+  /** Why the formatter refused, failing the test if it accepted. */
+  def refusalOf(hocon: String)(using munit.Location): Refusal =
+    HoconFormatter.format(hocon).swap.getOrElse(fail(s"expected a refusal, but it formatted: $hocon"))
 
   /** Asserts two snippets mean the same thing, whatever their spelling. */
   def assertSameMeaning(actual: String, expected: String, clue: => String)(using

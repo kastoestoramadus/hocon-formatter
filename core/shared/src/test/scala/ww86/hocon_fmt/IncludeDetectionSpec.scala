@@ -73,8 +73,8 @@ class IncludeDetectionSpec extends munit.FunSuite with HoconTestSupport {
 
   test("same line: closing brace survives so the result re-parses") {
     val raw = """o { include "f.conf" }"""
-    assert(format(raw).isSuccess, "formatting failed outright")
-    assert(format(formatted(raw)).isSuccess, "output does not survive a second pass")
+    assert(format(raw).isRight, "formatting failed outright")
+    assert(format(formatted(raw)).isRight, "output does not survive a second pass")
   }
 
   test("no whitespace after include is still a directive") {

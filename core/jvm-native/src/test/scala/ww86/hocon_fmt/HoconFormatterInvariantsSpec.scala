@@ -31,7 +31,7 @@ class HoconFormatterInvariantsSpec extends munit.FunSuite with HoconTestSupport 
   resourceFiles.foreach { file =>
     test(s"output re-parses: ${file.getName}") {
       val once = formatted(FileFixtures.read(file))
-      assert(format(once).isSuccess, s"formatted output of ${file.getName} does not re-parse")
+      assert(format(once).isRight, s"formatted output of ${file.getName} does not re-parse")
     }
   }
 
