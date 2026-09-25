@@ -2,19 +2,15 @@ package ww86.hocon_fmt
 
 import java.io.File
 
-import org.ekrich.config.{ConfigFactory, ConfigParseOptions}
-
 import ww86.hocon_fmt.HoconFormatter.*
 
 /** Invariants that must hold for every input, as a safety net under changes to the
   * include-placeholder preprocessing.
   */
-class HoconFormatterInvariantsSpec extends munit.FunSuite {
-
-  private val parseOptions = ConfigParseOptions.defaults.setAllowMissing(true)
+class HoconFormatterInvariantsSpec extends munit.FunSuite with HoconTestSupport {
 
   // Shared with GoldenFileSpec so golden files are never mistaken for inputs.
-  private val resourceFiles: List[File] = GoldenFileSpec.inputs
+  val resourceFiles: List[File] = FileFixtures.inputs
 
   test("test resources are discovered") {
     assert(resourceFiles.nonEmpty, "no .conf fixtures found")
@@ -24,8 +20,8 @@ class HoconFormatterInvariantsSpec extends munit.FunSuite {
   // This is what catches the placeholder round-trip breaking on already-formatted input.
   resourceFiles.foreach { file =>
     test(s"idempotent: ${file.getName}") {
-      val once  = fmtFileToStr(file).get
-      val twice = format(once).get
+      val once  = formatted(FileFixtures.read(file))
+      val twice = formatted(once)
       assertEquals(twice, once, s"second pass changed the output of ${file.getName}")
     }
   }
@@ -34,14 +30,14 @@ class HoconFormatterInvariantsSpec extends munit.FunSuite {
   // side effect inside the example-based tests, where its result was discarded.
   resourceFiles.foreach { file =>
     test(s"output re-parses: ${file.getName}") {
-      val once = fmtFileToStr(file).get
+      val once = formatted(FileFixtures.read(file))
       assert(format(once).isSuccess, s"formatted output of ${file.getName} does not re-parse")
     }
   }
 
   // Include-free configs can be parsed directly, so meaning can be compared before
   // and after formatting without going through the formatter's own preprocessing.
-  private val semanticCases = Map(
+  val semanticCases = Map(
     "nested objects"   -> """a { b { c : 1 }, d : "x" }""",
     "list and numbers" -> """xs : [1, 2, 3]
                             |pi : 3.14
@@ -56,34 +52,24 @@ class HoconFormatterInvariantsSpec extends munit.FunSuite {
 
   semanticCases.foreach { case (name, raw) =>
     test(s"meaning preserved: $name") {
-      val formatted = format(raw).get
-      assertEquals(
-        ConfigFactory.parseString(formatted, parseOptions),
-        ConfigFactory.parseString(raw, parseOptions),
-        s"formatting changed the meaning of: $name"
-      )
+      assertSameMeaning(formatted(raw), raw, s"formatting changed the meaning of: $name")
     }
   }
 
-  // Adversarial: the preprocessing injects "__REMOVEn: ME" markers into the source.
-  // Content that already looks like a marker must not be mistaken for one.
-  // The dangerous post-processing regex is "\n\s*__REMOVEd+: ME", so a marker at the
-  // start of a line is the shape that could actually be swallowed.
-  private val markerCases = Map(
-    "as a value"                 -> """key : "__REMOVE0: ME"""",
-    "at start of line"           -> "a : 1\n\"__REMOVE0: ME\" : 2",
-    "inside a multi-line string" -> "s : \"\"\"\n__REMOVE0: ME\n\"\"\"",
-    "bare marker line"           -> "__REMOVE0 : \"ME\"\nb : 2"
+  // Adversarial: the masking injects `__INCLUDE_<n>` and `__INCLUDE_GUARD_<n>` fields into the
+  // source. Content that already looks like one must not be mistaken for the real thing.
+  val markerCases = Map(
+    "placeholder as a value"      -> """key : "__INCLUDE_0"""",
+    "placeholder as a key"        -> """"__INCLUDE_0" : 1""",
+    "full placeholder field"      -> """__INCLUDE_0 : "__INCLUDE_0"""",
+    "guard field"                 -> """__INCLUDE_GUARD_0 : "g"""",
+    "guard field, unquoted value" -> """__INCLUDE_GUARD_0 : g""",
+    "inside a multi-line string"  -> "s : \"\"\"\n__INCLUDE_0\n\"\"\""
   )
 
   markerCases.foreach { case (name, raw) =>
-    test(s"placeholder text is not mistaken for a marker: $name") {
-      val formatted = format(raw).get
-      assertEquals(
-        ConfigFactory.parseString(formatted, parseOptions),
-        ConfigFactory.parseString(raw, parseOptions),
-        s"marker-like content was corrupted: $name"
-      )
+    test(s"marker-like input is not mistaken for a marker: $name") {
+      assertSameMeaning(formatted(raw), raw, s"marker-like content was corrupted: $name")
     }
   }
 }
