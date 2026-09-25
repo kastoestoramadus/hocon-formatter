@@ -43,3 +43,7 @@ hs_err_pid*
 
 # scala-cli
 .scala-build/
+
+# Gradle (gradle-plugin/)
+/gradle-plugin/.gradle/
+/gradle-plugin/build/
