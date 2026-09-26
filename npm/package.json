@@ -1,0 +1,19 @@
+{
+  "name": "hocon-formatter",
+  "version": "0.0.0",
+  "description": "Formats HOCON configuration files, or checks that they are formatted.",
+  "keywords": ["hocon", "formatter", "typesafe-config", "pre-commit"],
+  "homepage": "https://github.com/kastoestoramadus/hocon-formatter",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kastoestoramadus/hocon-formatter.git"
+  },
+  "license": "GPL-3.0-only",
+  "bin": {
+    "hocon-formatter": "hocon-formatter.js"
+  },
+  "files": ["hocon-formatter.js"],
+  "engines": {
+    "node": ">=18"
+  }
+}
