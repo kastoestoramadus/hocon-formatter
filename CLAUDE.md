@@ -19,6 +19,7 @@ sbt crossCompile                                # compile only, no Node or clang
 sbt coreJS/test                                 # the Scala.js half on its own
 sbt libraryDefects                              # the red sconfig-bug tests
 sbt sbtPluginTest                               # the sbt plugin, scripted (slow: a fresh sbt each)
+sbt coreJVM/publishM2 && (cd gradle-plugin && ./gradlew check)   # the Gradle plugin, TestKit
 
 sbt "coreJVM/testOnly ww86.hocon_fmt.IncludeDetectionSpec"
 sbt "coreJVM/testOnly ww86.hocon_fmt.HoconFormatterInvariantsSpec -- *idempotent*"
