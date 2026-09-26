@@ -1,3 +1,5 @@
+import scala.scalanative.build.{LTO, Mode}
+
 val scala3  = "3.8.2"
 val sconfig = "1.12.4"
 val munit   = "1.2.4"
@@ -63,9 +65,11 @@ lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .jsSettings(announceRuntime("core on Scala.js"))
   .nativeSettings(announceRuntime("core on Scala Native"))
   .platformsSettings(JSPlatform, NativePlatform)(
-    // sconfig declares this `provided`, so a non-JVM consumer has to supply it: sconfig reaches
-    // for java.time, which neither the Scala.js nor the Scala Native javalib carries.
-    libraryDependencies += "org.ekrich" %%% "sjavatime" % sjavatime
+    // sconfig reaches for java.time, which neither the Scala.js nor the Scala Native javalib
+    // carries. Provided, as sconfig itself declares it: an application supplies exactly one
+    // implementation, and two of the same package clash at link time. The CLI gets
+    // scala-java-time through cats-effect; this one only serves core's own tests.
+    libraryDependencies += "org.ekrich" %%% "sjavatime" % sjavatime % Provided
   )
 
 lazy val coreJVM    = core.jvm
@@ -98,7 +102,14 @@ lazy val cli = crossProject(JVMPlatform, JSPlatform, NativePlatform)
     // fs2-io reaches Node's `fs` through `require`.
     scalaJSLinkerConfig ~= (_.withModuleKind(ModuleKind.CommonJSModule))
   )
-  .nativeSettings(announceRuntime("cli on Scala Native"))
+  .nativeSettings(
+    announceRuntime("cli on Scala Native"),
+    // The shipped binary is optimised; tests link in debug mode, which is several times faster.
+    Compile / nativeConfig ~= {
+      _.withBaseName("hocon-formatter").withMode(Mode.releaseFast).withLTO(LTO.thin)
+    },
+    Test / nativeConfig ~= { _.withMode(Mode.debug).withLTO(LTO.none) }
+  )
 
 lazy val cliJVM    = cli.jvm
 lazy val cliJS     = cli.js

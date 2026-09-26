@@ -26,8 +26,8 @@ class CmdApiSpec extends munit.CatsEffectSuite {
 
   def textOf(file: Path): IO[String] = bytesOf(file).map(bytes => String(bytes.toArray, UTF_8))
 
-  def check(files: Path*): IO[CmdApi.Run]   = CmdApi.run(Arguments(files.toList, checkOnly = true))
-  def rewrite(files: Path*): IO[CmdApi.Run] = CmdApi.run(Arguments(files.toList, checkOnly = false))
+  def check(files: Path*): IO[CmdApi.Run]   = CmdApi.examineAll(Arguments(files.toList, checkOnly = true))
+  def rewrite(files: Path*): IO[CmdApi.Run] = CmdApi.examineAll(Arguments(files.toList, checkOnly = false))
 
   val unformatted = "a   :    1"
   val formatted   = "a: 1\n"
