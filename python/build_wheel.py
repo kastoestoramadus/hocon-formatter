@@ -73,6 +73,7 @@ def build(binary_path: Path, version: str, tag: str, out: Path) -> Path:
     record = "\n".join([record_line(p, c) for p, c in files.items()] + [f"{record_path},,"]) + "\n"
     files[record_path] = record.encode()
 
+    out.mkdir(parents=True, exist_ok=True)
     wheel = out / f"{DISTRIBUTION}-{version}-py3-none-{tag}.whl"
     with zipfile.ZipFile(wheel, "w", zipfile.ZIP_DEFLATED) as archive:
         for path, content in files.items():
