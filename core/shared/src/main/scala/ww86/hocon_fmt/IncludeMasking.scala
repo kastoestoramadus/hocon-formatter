@@ -39,16 +39,18 @@ private[hocon_fmt] object IncludeMasking {
   }
 
   def unmask(rendered: String, originals: Map[Int, String]): String = {
-    val restored = replaceEachMatch(rendered, PlaceholderField) { index =>
+    val restored = replaceEachMatch(rendered, PlaceholderField) { field =>
+      // Compared as text, as a backreference would: `__INCLUDE_01` is not placeholder 1.
+      val sameIndex = field.group(1) == field.group(2)
       // An index we never handed out belongs to the user's own text: leave it untouched.
-      originals.get(index)
+      Option.when(sameIndex)(field.group(1).toInt).flatMap(originals.get)
     }
     // Own-line first: it consumes the newline and indentation, which the inline pattern leaves
     // behind. The other order turns every guard on its own line into a blank one.
-    val ours                 = originals.keySet
-    val withoutOwnLineGuards =
-      replaceEachMatch(restored, GuardOnItsOwnLine)(i => Option.when(ours(i))(""))
-    replaceEachMatch(withoutOwnLineGuards, GuardInline)(i => Option.when(ours(i))(""))
+    val ours                     = originals.keySet
+    def dropOurs(guard: Matcher) = Option.when(ours(guard.group(1).toInt))("")
+    val withoutOwnLineGuards     = replaceEachMatch(restored, GuardOnItsOwnLine)(dropOurs)
+    replaceEachMatch(withoutOwnLineGuards, GuardInline)(dropOurs)
   }
 
   // ---- placeholders --------------------------------------------------------------------------
@@ -67,10 +69,14 @@ private[hocon_fmt] object IncludeMasking {
 
   private val OptionalQuote = """["]?"""
 
-  /** Built from the same constants the placeholders are written with, so the two cannot drift. */
+  /** Built from the same constants the placeholders are written with, so the two cannot drift.
+    *
+    * The value's index is captured rather than backreferenced to the key's, because Scala Native's
+    * `java.util.regex` is RE2-based and has no backreferences; `unmask` compares the two.
+    */
   private val PlaceholderField = Pattern.compile(
     s"""$OptionalQuote$PlaceholderPrefix(\\d+)$OptionalQuote\\s*:""" +
-      s"""\\s*$OptionalQuote$PlaceholderPrefix\\1$OptionalQuote"""
+      s"""\\s*$OptionalQuote$PlaceholderPrefix(\\d+)$OptionalQuote"""
   )
 
   // The renderer may or may not quote the guard value, so both spellings have to match.
@@ -79,19 +85,28 @@ private[hocon_fmt] object IncludeMasking {
   private val GuardOnItsOwnLine = Pattern.compile(s"""\\n[ \\t]*$guardField""")
   private val GuardInline       = Pattern.compile(s""",?[ \\t]*$guardField""")
 
-  /** Rewrites every match whose captured index `replacement` accepts, leaving the rest verbatim. */
+  /** Rewrites every match `replacement` accepts, leaving the rest verbatim.
+    *
+    * A rejected match is not consumed: the search resumes one character past its start, as a
+    * regex engine does when a backreference fails there. Consuming it would let a near miss
+    * swallow the key of a real placeholder that follows it.
+    */
   private def replaceEachMatch(text: String, pattern: Pattern)(
-      replacement: Int => Option[String]
+      replacement: Matcher => Option[String]
   ): String = {
-    val matcher = pattern.matcher(text)
-    val out     = new StringBuffer()
-    while (matcher.find()) {
-      val index = matcher.group(1).toInt
-      val next  = replacement(index).getOrElse(matcher.group())
-      matcher.appendReplacement(out, Matcher.quoteReplacement(next))
-    }
-    matcher.appendTail(out)
-    out.toString
+    val matcher    = pattern.matcher(text)
+    val out        = new StringBuilder
+    var copiedUpTo = 0
+    var from       = 0
+    while (matcher.find(from))
+      replacement(matcher) match {
+        case Some(next) =>
+          out.append(text.substring(copiedUpTo, matcher.start)).append(next)
+          copiedUpTo = matcher.end
+          from = matcher.end
+        case None => from = matcher.start + 1
+      }
+    out.append(text.substring(copiedUpTo)).toString
   }
 
   // ---- locating an include statement ---------------------------------------------------------

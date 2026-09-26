@@ -29,8 +29,8 @@ jobs:
       - name: Set up sbt
         uses: sbt/setup-sbt@v1
 
-      # Covers both runtimes: the root project aggregates coreJVM, coreJS and cli.
-      # Ubuntu runners ship Node, which the Scala.js half needs.
+      # Covers every runtime: core on the JVM, Scala.js and Scala Native, and the cli.
+      # Ubuntu runners ship Node for Scala.js and clang for Scala Native.
       - name: Compile and test
         run: sbt test
 

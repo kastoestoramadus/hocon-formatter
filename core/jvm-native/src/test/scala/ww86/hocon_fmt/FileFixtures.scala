@@ -4,18 +4,18 @@ import java.io.File
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
-/** Fixture files for the JVM-only suites.
+/** Fixture files for the suites that read files, which run on the JVM and Scala Native.
   *
   * The golden workflow rewrites these files, so they are addressed by source path rather than
   * loaded from the classpath. sbt runs tests from the build root; the fallback covers running
-  * from inside the module.
+  * from inside a platform module.
   */
 object FileFixtures {
   val directory: File =
-    List("core/jvm/src/test/resources", "src/test/resources")
+    List("core/jvm-native/src/test/resources", "../jvm-native/src/test/resources")
       .map(new File(_))
       .find(_.isDirectory)
-      .getOrElse(new File("core/jvm/src/test/resources"))
+      .getOrElse(new File("core/jvm-native/src/test/resources"))
 
   val GoldenSuffix = ".expected.conf"
 
