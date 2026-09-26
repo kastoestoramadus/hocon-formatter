@@ -29,8 +29,11 @@ object `package` extends ScalaModule, PublishModule {
     def mvnDeps      = build.compileMvnDeps() :+ mvn"com.lihaoyi::mill-testkit:$millVersion"
   }
 
-  // Runs a real Mill, which loads the plugin from a repository it was published to.
-  object integration extends ScalaTests, TestModule.Munit {
+  // Runs a real Mill, which loads the plugin from a repository it was published to: the oldest
+  // Mill the plugin supports, and the newest it is known to work on.
+  object integration extends Cross[Integration](millVersion, "1.1.10")
+
+  trait Integration extends ScalaTests, TestModule.Munit, Cross.Module[String] {
     def munitVersion = "1.2.4"
     def mvnDeps      = Seq(mvn"com.lihaoyi::mill-testkit:$millVersion")
     def forkEnv = Task {
@@ -47,7 +50,7 @@ object `package` extends ScalaModule, PublishModule {
     }
 
     object millExecutable extends JavaModule {
-      def mvnDeps   = Seq(mvn"com.lihaoyi:mill-runner-launcher_3:$millVersion")
+      def mvnDeps   = Seq(mvn"com.lihaoyi:mill-runner-launcher_3:$crossValue")
       def mainClass = Some("mill.launcher.MillLauncherMain")
     }
   }
