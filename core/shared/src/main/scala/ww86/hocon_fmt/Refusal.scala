@@ -14,6 +14,11 @@ enum Refusal {
   /** sconfig rendered text it cannot read back: one of the defects in `SconfigDefectsSpec`. */
   case BrokenOutput(detail: String)
 
+  /** sconfig drops a comment that no field follows. A comment carries no meaning, so no other
+    * check notices; losing one still loses what someone wrote down.
+    */
+  case LostComment(text: String)
+
   /** Formatting the output again would change it, so the file would never settle. sconfig renders
     * an unresolved merge as a comment banner that parses but grows on every pass.
     */
@@ -23,6 +28,7 @@ enum Refusal {
     case NotUtf8              => "not valid UTF-8"
     case NotHocon(detail)     => s"not valid HOCON: $detail"
     case BrokenOutput(detail) => s"the output would not parse again: $detail"
+    case LostComment(text)    => s"a comment would be lost: $text"
     case UnstableOutput       => "a second formatting pass would change the output again"
   }
 }

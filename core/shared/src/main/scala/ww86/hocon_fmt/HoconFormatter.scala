@@ -33,6 +33,7 @@ object HoconFormatter {
   def format(source: String): Either[Refusal, String] =
     for {
       formatted <- attempt(formatOnce(source))(Refusal.NotHocon(_))
+      _         <- commentsKept(source, formatted)
       _         <- secondPassAgrees(formatted)
     } yield formatted
 
@@ -63,6 +64,12 @@ object HoconFormatter {
     attempt(formatOnce(formatted))(Refusal.BrokenOutput(_))
       .filterOrElse(_ == formatted, Refusal.UnstableOutput)
       .map(_ => ())
+
+  /** Every comment of the source, as many times as it occurs; the multiset difference names the
+    * first one missing.
+    */
+  private def commentsKept(source: String, formatted: String): Either[Refusal, Unit] =
+    HoconText.comments(source).diff(HoconText.comments(formatted)).headOption.map(Refusal.LostComment(_)).toLeft(())
 
   private def attempt[A](run: => A)(refusal: String => Refusal): Either[Refusal, A] =
     Try(run).toEither.left.map(e => refusal(Option(e.getMessage).getOrElse(e.toString)))
