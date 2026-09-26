@@ -13,7 +13,10 @@ import ww86.hocon_fmt.HoconGen.*
   */
 class FormatterPropertiesSpec extends munit.ScalaCheckSuite with HoconTestSupport {
 
-  override def scalaCheckTestParameters = super.scalaCheckTestParameters.withMinSuccessfulTests(200)
+  // The rarest defects found so far took thousands of documents to turn up; a deeper search is
+  // `sbt -Dhocon.properties=20000 "coreJVM/testOnly ww86.hocon_fmt.FormatterPropertiesSpec"`.
+  override def scalaCheckTestParameters = super.scalaCheckTestParameters
+    .withMinSuccessfulTests(sys.props.get("hocon.properties").map(_.toInt).getOrElse(1000))
 
   property("never loses a comment") {
     forAll(documents(includes = true)) { doc =>
@@ -45,7 +48,7 @@ class FormatterPropertiesSpec extends munit.ScalaCheckSuite with HoconTestSuppor
 
   // Without this the properties above would pass vacuously on a formatter that refused everything.
   property("formats every document it has no reason to refuse") {
-    forAll(documents(includes = true).suchThat(_.everyCommentPrecedesAField)) { doc =>
+    forAll(documents(includes = true, distinctKeys = true).suchThat(_.everyCommentPrecedesAField)) { doc =>
       format(doc.text) match {
         case Right(out)    => assertEquals(format(out), Right(out), "output is not a fixed point")
         case Left(refusal) => fail(s"refused: ${refusal.reason}")

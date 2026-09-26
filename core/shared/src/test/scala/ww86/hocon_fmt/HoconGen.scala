@@ -175,6 +175,32 @@ object HoconGen {
     case scalar             => scalar
   }
 
-  def documents(includes: Boolean): Gen[Document] =
-    Gen.choose(0, 8).flatMap(Gen.listOfN(_, node(2, includes))).map(Document(_))
+  /** With `distinctKeys`, no field replaces or merges into another. Otherwise a later definition of
+    * a key may replace an object, and everything written inside it, which is the formatter's
+    * business to notice.
+    */
+  def documents(includes: Boolean, distinctKeys: Boolean = false): Gen[Document] =
+    Gen.choose(0, 8).flatMap(Gen.listOfN(_, node(2, includes))).map { nodes =>
+      Document(if (distinctKeys) withDistinctKeys(nodes) else nodes)
+    }
+
+  /** Renames fields so no two at one level share the first segment of their path. */
+  def withDistinctKeys(nodes: List[Node]): List[Node] =
+    nodes.zipWithIndex.map {
+      case (Node.Field(key, separator, value), i) =>
+        val (first, rest) = firstSegment(key)
+        Node.Field(s"${first}_$i$rest", separator, distinctKeysIn(value))
+      case (other, _) => other
+    }
+
+  def distinctKeysIn(value: Value): Value = value match {
+    case Value.Object(nodes) => Value.Object(withDistinctKeys(nodes))
+    case Value.Array(items)  => Value.Array(items.map(distinctKeysIn))
+    case scalar              => scalar
+  }
+
+  // A quoted key is one segment, closing quote and all; the suffix goes inside the quotes.
+  def firstSegment(key: String): (String, String) =
+    if (key.startsWith("\"")) (key.dropRight(1), "\"")
+    else key.span(_ != '.')
 }
