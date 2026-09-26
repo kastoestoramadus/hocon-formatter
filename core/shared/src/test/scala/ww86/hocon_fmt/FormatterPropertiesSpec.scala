@@ -48,7 +48,9 @@ class FormatterPropertiesSpec extends munit.ScalaCheckSuite with HoconTestSuppor
 
   // Without this the properties above would pass vacuously on a formatter that refused everything.
   property("formats every document it has no reason to refuse") {
-    forAll(documents(includes = true, distinctKeys = true).suchThat(_.everyCommentPrecedesAField)) { doc =>
+    val documentsWithoutReason = documents(includes = true, distinctKeys = true)
+      .suchThat(doc => doc.everyCommentPrecedesAField && !doc.hitsKnownSconfigDefect)
+    forAll(documentsWithoutReason) { doc =>
       format(doc.text) match {
         case Right(out)    => assertEquals(format(out), Right(out), "output is not a fixed point")
         case Left(refusal) => fail(s"refused: ${refusal.reason}")
