@@ -107,6 +107,18 @@ class IncludeDetectionSpec extends munit.FunSuite with HoconTestSupport {
     }
   }
 
+  // --- A later definition of the key ---------------------------------------------------------------
+  // sconfig merges repeated keys, so a later scalar replaces an earlier object and everything written
+  // in it. Found by FormatterPropertiesSpec: the include inside went with it, and no check noticed.
+
+  test("an include in an object a later definition replaces is not silently lost") {
+    format("o {\n  include \"x.conf\"\n  a : 1\n}\no : 5") match {
+      case Right(out)                   => assert(out.contains("include \"x.conf\""), s"the include was lost: $out")
+      case Left(Refusal.LostInclude(_)) => ()
+      case Left(other)                  => fail(s"refused for the wrong reason: ${other.reason}")
+    }
+  }
+
   // --- Layout around a leading include -------------------------------------------------------------
 
   List("""include "x.conf"""", """include required("x.conf")""").foreach { directive =>
