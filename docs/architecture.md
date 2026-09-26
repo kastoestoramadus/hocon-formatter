@@ -17,6 +17,7 @@ around it in `HoconFormatter`.
 | `sbt-plugin` | `hoconFormat`, `hoconFormatCheck` for sbt 1.x | JVM, Scala 2.12 | core, at run time |
 | `gradle-plugin` | the same two tasks for Gradle; standalone Gradle build | JVM, Java 17 | core, at run time |
 | `maven-plugin` | `hocon-formatter:format`, `hocon-formatter:check`; standalone Maven build | JVM, Java 17 | core |
+| `mill-plugin` | `hoconFormat`, `hoconFormatCheck` for Mill 1.1.4 and later; standalone Mill build | JVM, Scala 3 | core |
 | `npm/` | template of the npm package that wraps the Node build of the CLI | Node | cli |
 | `python/` | builds the wheel that carries the native binary, for the pre-commit hooks | | cli |
 | `bench` | times each formatter phase; see [testing](testing.md#benchmarks) | JVM, Scala.js, Scala Native | core |
@@ -102,3 +103,8 @@ A formatter written in Scala 3 has to reach hosts that are not:
 
 `JvmFacade.reformat(byte[]): Optional<String>`, throwing a checked `FormatRefusedException` whose
 message is the reason, is the JDK-typed boundary all three share.
+
+**Mill** needs none of this: from 1.1.4 it runs on Scala 3.8.2, as the core does, so its plugin is
+a Scala 3 trait that depends on the core and matches on `Verdict` directly. A Mill plugin works on
+the Mill it was compiled against and on newer ones, so it is compiled against 1.1.4 and tested on
+1.1.4 and the newest Mill.

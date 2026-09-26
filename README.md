@@ -2,7 +2,7 @@
 
 A formatter for [HOCON](https://github.com/lightbend/config/blob/main/HOCON.md) configuration
 files: a command line tool (native binary, Node, JVM), pre-commit hooks, and plugins for sbt,
-Gradle and Maven, all running one Scala 3 core.
+Gradle, Maven and Mill, all running one Scala 3 core.
 
 ```
 $ cat application.conf
@@ -44,6 +44,7 @@ round trip deletes them. The formatter carries each whole statement across the r
 | sbt | `addSbtPlugin("io.github.kastoestoramadus" % "sbt-hocon-formatter" % "0.1.0")`, then `hoconFormat` / `hoconFormatCheck` |
 | Gradle | `id("io.github.kastoestoramadus.hocon-formatter")`, then `hoconFormat` / `hoconFormatCheck` (part of `check`) |
 | Maven | `hocon-formatter-maven-plugin`, goals `format` / `check` (bound to `verify`) |
+| Mill | `io.github.kastoestoramadus::mill-hocon-formatter`, trait `HoconFormatterModule`, then `__.hoconFormat` / `__.hoconFormatCheck` |
 
 Configuration for each: [usage](docs/usage.md).
 

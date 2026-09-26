@@ -1,0 +1,67 @@
+//| mill-version: 1.1.10
+//| mill-jvm-version: 17
+package build
+
+import mill.*, scalalib.*, publish.*
+
+// A plugin runs on the Mill that loads it, so it is compiled against the oldest Mill it supports:
+// 1.1.4, the first on Scala 3.8.2, which the core is built with. Sharing the Scala of its host
+// lets the plugin call the core directly, where the sbt plugin needs an isolated class loader.
+object `package` extends ScalaModule, PublishModule {
+  def millVersion      = "1.1.4"
+  def formatterVersion = "0.1.0-SNAPSHOT"
+
+  def scalaVersion   = "3.8.2"
+  def platformSuffix = "_mill1"
+  def artifactName   = "mill-hocon-formatter"
+
+  def compileMvnDeps = Seq(mvn"com.lihaoyi::mill-libs:$millVersion")
+  def mvnDeps        = Seq(mvn"io.github.kastoestoramadus::hocon-formatter-core:$formatterVersion")
+
+  // The suffix names the Mill the plugin runs on; the core is an ordinary Scala 3 library.
+  protected def resolvedDepsWarnNonPlatform = Task { false }
+
+  def scalacOptions = Seq("-deprecation", "-feature", "-Werror")
+
+  // Mill loads its own libraries at run time; its tests need them on the classpath.
+  object test extends ScalaTests, TestModule.Munit {
+    def munitVersion = "1.2.4"
+    def mvnDeps      = build.compileMvnDeps() :+ mvn"com.lihaoyi::mill-testkit:$millVersion"
+  }
+
+  // Runs a real Mill, which loads the plugin from a repository it was published to: the oldest
+  // Mill the plugin supports, and the newest it is known to work on.
+  object integration extends Cross[Integration](millVersion, "1.1.10")
+
+  trait Integration extends ScalaTests, TestModule.Munit, Cross.Module[String] {
+    def munitVersion = "1.2.4"
+    def mvnDeps      = Seq(mvn"com.lihaoyi::mill-testkit:$millVersion")
+    def forkEnv = Task {
+      // ivy2Local holds the core until it is on Maven Central: `sbt coreJVM/publishLocal`.
+      val repositories = Seq(
+        publishLocalTestRepo().path.toNIO.toUri.toASCIIString,
+        Task.env.getOrElse("COURSIER_REPOSITORIES", "ivy2Local|central")
+      )
+      super.forkEnv() ++ Map(
+        "MILL_EXECUTABLE_PATH"  -> millExecutable.assembly().path.toString,
+        "COURSIER_REPOSITORIES" -> repositories.mkString("|"),
+        "PLUGIN_UNDER_TEST"     -> s"${build.pomSettings().organization}::${build.artifactName()}::${build.publishVersion()}"
+      )
+    }
+
+    object millExecutable extends JavaModule {
+      def mvnDeps   = Seq(mvn"com.lihaoyi:mill-runner-launcher_3:$crossValue")
+      def mainClass = Some("mill.launcher.MillLauncherMain")
+    }
+  }
+
+  def publishVersion = formatterVersion
+  def pomSettings = PomSettings(
+    description = "Formats HOCON configuration files, or fails the build when they are not formatted.",
+    organization = "io.github.kastoestoramadus",
+    url = "https://github.com/kastoestoramadus/hocon-formatter",
+    licenses = Seq(License.`GPL-3.0-only`),
+    versionControl = VersionControl.github("kastoestoramadus", "hocon-formatter"),
+    developers = Seq(Developer("kastoestoramadus", "Waldemar Wosinski", "https://github.com/kastoestoramadus"))
+  )
+}

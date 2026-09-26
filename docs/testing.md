@@ -17,6 +17,7 @@ what it touches: `shared` runs on every platform, `jvm-native` reads files, `jvm
 | scripted | `sbt-plugin/src/sbt-test` | the sbt plugin in a real sbt build |
 | functional | `gradle-plugin/src/functionalTest` | the Gradle plugin through TestKit, including configuration cache and up-to-date checks |
 | invoker | `maven-plugin/src/it` | the Maven plugin in real Maven builds |
+| unit, integration | `mill-plugin/test`, `mill-plugin/integration` | the Mill plugin in process through `UnitTester`, and in a real Mill: 1.1.4, the oldest supported, and 1.1.10 |
 | e2e | `scripts/pre-commit-e2e.sh` | both families of pre-commit hooks, native and Node, installed from this repository as a user would |
 
 ## Property tests
