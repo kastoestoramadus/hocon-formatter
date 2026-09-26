@@ -45,7 +45,7 @@ def announceRuntime(label: String): Setting[?] =
 lazy val root = project
   .in(file("."))
   // Aggregation drives compile, scalafmt and the rest.
-  .aggregate(coreJVM, coreJS, coreNative, cliJVM, cliJS, cliNative, sbtPlugin)
+  .aggregate(coreJVM, coreJS, coreNative, cliJVM, cliJS, cliNative, benchJVM, benchJS, benchNative, sbtPlugin)
   .settings(
     name := "hocon-formatter",
     publish / skip := true,
@@ -161,6 +161,33 @@ addCommandAlias(
     .mkString("; ")
 )
 addCommandAlias("libraryDefects", "coreJVM/testOnly ww86.hocon_fmt.SconfigDefectsSpec")
+
+/** Timings of each formatter phase on each platform; see `scripts/bench.py`. Not published. The
+  * mutable loop in `Bench.measure` is deliberate: an allocation-free timing loop is the one place
+  * where the functional style would distort what it measures.
+  */
+lazy val bench = crossProject(JVMPlatform, JSPlatform, NativePlatform)
+  .crossType(CrossType.Pure)
+  .in(file("bench"))
+  .dependsOn(core)
+  .settings(
+    name           := "hocon-formatter-bench",
+    publish / skip := true
+  )
+  .jvmSettings(run / fork := true)
+  .jsSettings(
+    scalaJSUseMainModuleInitializer := true,
+    // Timings of the fast-optimised output would describe a build nobody ships.
+    scalaJSStage := FullOptStage
+  )
+  .platformsSettings(JSPlatform, NativePlatform)(
+    libraryDependencies += "org.ekrich" %%% "sjavatime" % sjavatime
+  )
+  .nativeSettings(nativeConfig ~= { _.withMode(Mode.releaseFast).withLTO(LTO.thin) })
+
+lazy val benchJVM    = bench.jvm
+lazy val benchJS     = bench.js
+lazy val benchNative = bench.native
 
 /** The sbt 1.x plugin. sbt loads plugins with Scala 2.12, which cannot link against this Scala 3
   * build, so the plugin resolves the core at run time and calls it through `JvmFacade` in an
