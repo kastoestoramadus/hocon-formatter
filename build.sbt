@@ -154,10 +154,19 @@ addCommandAlias("libraryDefects", "coreJVM/testOnly ww86.hocon_fmt.SconfigDefect
   */
 lazy val sbtPlugin = project
   .in(file("sbt-plugin"))
-  .enablePlugins(SbtPlugin)
+  .enablePlugins(SbtPlugin, BuildInfoPlugin)
   .settings(
     name         := "sbt-hocon-formatter",
     scalaVersion := "2.12.21",
+    // The coordinates the plugin resolves the formatter by, so the two are released in lockstep.
+    buildInfoPackage := "ww86.hocon_fmt.sbt",
+    buildInfoObject  := "FormatterArtifact",
+    buildInfoKeys := Seq[BuildInfoKey](
+      "organization" -> (coreJVM / organization).value,
+      "name"         -> s"${(coreJVM / moduleName).value}_${(coreJVM / scalaBinaryVersion).value}",
+      "version"      -> (coreJVM / version).value,
+      "scalaVersion" -> (coreJVM / scalaVersion).value
+    ),
     scriptedLaunchOpts += s"-Dplugin.version=${version.value}",
     // The plugin fetches the core by its coordinates, so scripted needs it published first.
     scriptedDependencies := scriptedDependencies.dependsOn(coreJVM / publishLocal).value
