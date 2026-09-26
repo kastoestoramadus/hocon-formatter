@@ -7,7 +7,7 @@ sconfig, cross-built for the JVM, Scala.js and Scala Native. GPL-3.0.
 ## Commands
 
 ```bash
-sbt test                  # core + cli on JVM, Scala.js, Scala Native (needs Node and clang)
+sbt test                  # core + cli on JVM, Scala.js, Scala Native, and web (needs Node and clang)
 sbt crossCompile          # compile every platform's tests; needs neither Node nor clang
 sbt scalafmtAll           # format; CI runs scalafmtCheckAll
 sbt libraryDefects        # SconfigDefectsSpec on every platform: red by design, 13 (JVM, Native), 14 (JS)
@@ -23,6 +23,7 @@ scripts/bench.py report   # medians per commit, slowdowns flagged
 
 sbt cliNative/nativeLink  # cli/.native/target/scala-3.8.2/hocon-formatter
 sbt cliJS/npmPackage      # cli/.js/target/npm-package
+sbt web/bundle            # web/target/bundle/hocon-formatter.js, the playground's script
 sbt "cliJVM/run --check path/to/file.conf"
 sbt "coreJVM/testOnly ww86.hocon_fmt.HoconFormatterInvariantsSpec -- *idempotent*"
 UPDATE_GOLDEN=1 sbt "coreJVM/testOnly ww86.hocon_fmt.GoldenFileSpec"
@@ -33,10 +34,11 @@ platform is how a port rots.
 
 ## Layout
 
-`core` (pure formatting, sconfig only) · `cli` (cats-effect `IOApp`) · `sbt-plugin` (Scala 2.12)
-· `gradle-plugin`, `maven-plugin` (standalone Java builds) · `mill-plugin` (standalone Mill build) · `npm/` (package template) · `python/`
-(wheel carrying the native binary) · `bench` · `.pre-commit-hooks.yaml`. Details and the reasons
-behind them: [docs/architecture.md](docs/architecture.md).
+`core` (pure formatting, sconfig only) · `cli` (cats-effect `IOApp`) · `web` (script for web
+pages, see [docs/playground.md](docs/playground.md)) · `sbt-plugin` (Scala 2.12) · `gradle-plugin`,
+`maven-plugin` (standalone Java builds) · `mill-plugin` (standalone Mill build) · `npm/` (package
+template) · `python/` (wheel carrying the native binary) · `bench` · `.pre-commit-hooks.yaml`.
+Details and the reasons behind them: [docs/architecture.md](docs/architecture.md).
 
 ## Rules
 

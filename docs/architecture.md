@@ -14,6 +14,7 @@ around it in `HoconFormatter`.
 |---|---|---|---|
 | `core` | `HoconFormatter.format: String => Either[Refusal, String]`, `Verdict`, include masking | JVM, Scala.js, Scala Native | sconfig only |
 | `cli` | `CmdApi`, an `IOApp`: arguments, file IO, parallelism, report | JVM, Scala.js (Node), Scala Native | core, cats-effect, fs2-io, decline |
+| `web` | the formatter as a script for web pages: one global, `HoconFormatter`; the [playground](playground.md)'s engine | Scala.js | core |
 | `sbt-plugin` | `hoconFormat`, `hoconFormatCheck` for sbt 1.x | JVM, Scala 2.12 | core, at run time |
 | `gradle-plugin` | the same two tasks for Gradle; standalone Gradle build | JVM, Java 17 | core, at run time |
 | `maven-plugin` | `hocon-formatter:format`, `hocon-formatter:check`; standalone Maven build | JVM, Java 17 | core |
