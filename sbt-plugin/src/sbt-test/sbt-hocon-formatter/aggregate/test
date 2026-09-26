@@ -1,0 +1,16 @@
+# Run in a subproject, the task covers that project and nothing it does not aggregate.
+> a/hoconFormat
+$ must-mirror a/src/main/resources/a.conf expected/a.conf
+$ must-mirror shared/shared.conf expected/shared.conf
+$ must-mirror b/src/main/resources/b.conf original/b.conf
+
+# Run at the root, it covers every aggregated project, and a file two of them share is examined
+# once: two concurrent runs over one file could each write it.
+$ copy-file original/shared.conf shared/shared.conf
+-> hoconFormatCheck
+> assertWarnedOnce hoconFormatCheck b/src/main/resources/b.conf shared/shared.conf
+
+> hoconFormat
+$ must-mirror b/src/main/resources/b.conf expected/b.conf
+$ must-mirror shared/shared.conf expected/shared.conf
+> hoconFormatCheck

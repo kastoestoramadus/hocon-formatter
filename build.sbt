@@ -13,6 +13,27 @@ val munitCatsEffect = "2.2.1"
 ThisBuild / scalaVersion := scala3
 ThisBuild / version      := "0.1.0-SNAPSHOT"
 
+// Coordinates and the metadata Sonatype requires before anything can reach Maven Central,
+// which is what `cs` and therefore the pre-commit coursier hook resolve from.
+ThisBuild / organization         := "io.github.kastoestoramadus"
+ThisBuild / organizationName     := "kastoestoramadus"
+ThisBuild / homepage             := Some(url("https://github.com/kastoestoramadus/hocon-formatter"))
+ThisBuild / licenses             := Seq("GPL-3.0" -> url("https://www.gnu.org/licenses/gpl-3.0.html"))
+ThisBuild / scmInfo := Some(
+  ScmInfo(
+    url("https://github.com/kastoestoramadus/hocon-formatter"),
+    "scm:git:https://github.com/kastoestoramadus/hocon-formatter.git"
+  )
+)
+ThisBuild / developers := List(
+  Developer(
+    "kastoestoramadus",
+    "Waldemar Wosinski",
+    "",
+    url("https://github.com/kastoestoramadus")
+  )
+)
+
 /** sbt prints one unlabelled "Passed: Total N" per aggregated project, and the Scala.js block
   * arrives without the `[info]` prefix, so nothing says which runtime a result came from. The
   * banner goes in a Cleanup hook rather than Setup so it lands next to that project's summary
@@ -24,7 +45,7 @@ def announceRuntime(label: String): Setting[?] =
 lazy val root = project
   .in(file("."))
   // Aggregation drives compile, scalafmt and the rest.
-  .aggregate(coreJVM, coreJS, coreNative, cliJVM, cliJS, cliNative)
+  .aggregate(coreJVM, coreJS, coreNative, cliJVM, cliJS, cliNative, sbtPlugin)
   .settings(
     name := "hocon-formatter",
     publish / skip := true,
@@ -124,3 +145,33 @@ addCommandAlias(
     .mkString("; ")
 )
 addCommandAlias("libraryDefects", "coreJVM/testOnly ww86.hocon_fmt.SconfigDefectsSpec")
+
+/** The sbt 1.x plugin. sbt loads plugins with Scala 2.12, which cannot link against this Scala 3
+  * build, so the plugin resolves the core at run time and calls it through `JvmFacade` in an
+  * isolated class loader, the way sbt-scalafmt runs scalafmt. Its behaviour is covered by the
+  * scripted tests in `sbt-plugin/src/sbt-test`, run with `sbtPluginTest`: each starts a fresh
+  * sbt, which is too slow for the `test` sequence.
+  */
+lazy val sbtPlugin = project
+  .in(file("sbt-plugin"))
+  .enablePlugins(SbtPlugin, BuildInfoPlugin)
+  .settings(
+    name         := "sbt-hocon-formatter",
+    scalaVersion := "2.12.21",
+    // The coordinates the plugin resolves the formatter by, so the two are released in lockstep.
+    buildInfoPackage := "ww86.hocon_fmt.sbt",
+    buildInfoObject  := "FormatterArtifact",
+    buildInfoKeys := Seq[BuildInfoKey](
+      "organization" -> (coreJVM / organization).value,
+      "name"         -> s"${(coreJVM / moduleName).value}_${(coreJVM / scalaBinaryVersion).value}",
+      "version"      -> (coreJVM / version).value,
+      "scalaVersion" -> (coreJVM / scalaVersion).value
+    ),
+    scriptedLaunchOpts += s"-Dplugin.version=${version.value}",
+    // The tests read sbt's logs; on CI, sbt colours them, and the escape codes hide `[warn]`.
+    scriptedLaunchOpts += "-Dsbt.log.noformat=true",
+    // The plugin fetches the core by its coordinates, so scripted needs it published first.
+    scriptedDependencies := scriptedDependencies.dependsOn(coreJVM / publishLocal).value
+  )
+
+addCommandAlias("sbtPluginTest", "sbtPlugin/scripted")
