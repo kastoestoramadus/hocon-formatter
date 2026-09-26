@@ -18,12 +18,12 @@ private[hocon_fmt] object IncludeMasking {
   case class Masked(text: String, originals: Map[Int, String])
 
   def mask(source: String): Masked = {
-    val masked     = new StringBuilder
-    val originals  = Map.newBuilder[Int, String]
-    val keywords   = IncludeKeyword.matcher(source)
-    val nonCode    = HoconText.spans(source)
-    var copiedUpTo = 0
-    var nextIndex  = 0
+    val masked       = new StringBuilder
+    val originals    = Map.newBuilder[Int, String]
+    val keywords     = IncludeKeyword.matcher(source)
+    lazy val nonCode = HoconText.spans(source) // only a file that mentions include pays for it
+    var copiedUpTo   = 0
+    var nextIndex    = 0
 
     while (keywords.find())
       if (keywords.start >= copiedUpTo && HoconText.isCode(nonCode, keywords.start))
