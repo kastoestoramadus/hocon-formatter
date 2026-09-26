@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>io.github.kastoestoramadus</groupId>
+  <!-- The `<prefix>-maven-plugin` form is what gives the goals the `hocon-formatter:` prefix. -->
+  <artifactId>hocon-formatter-maven-plugin</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <packaging>maven-plugin</packaging>
+
+  <name>hocon-formatter-maven-plugin</name>
+  <description>Formats HOCON configuration files, or fails the build when they are not formatted.</description>
+  <url>https://github.com/kastoestoramadus/hocon-formatter</url>
+
+  <licenses>
+    <license>
+      <name>GPL-3.0</name>
+      <url>https://www.gnu.org/licenses/gpl-3.0.html</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+  <developers>
+    <developer>
+      <id>kastoestoramadus</id>
+      <name>Waldemar Wosinski</name>
+      <url>https://github.com/kastoestoramadus</url>
+    </developer>
+  </developers>
+  <scm>
+    <url>https://github.com/kastoestoramadus/hocon-formatter</url>
+    <connection>scm:git:https://github.com/kastoestoramadus/hocon-formatter.git</connection>
+  </scm>
+
+  <!-- The floor Apache's own plugins require; older releases are long out of support. -->
+  <prerequisites>
+    <maven>3.6.3</maven>
+  </prerequisites>
+
+  <properties>
+    <!-- Scala 3.8, which the core is built with, needs JDK 17 at run time. -->
+    <maven.compiler.release>17</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!-- Compiling against the oldest supported API keeps anything newer out of the plugin. -->
+    <maven.api.version>3.6.3</maven.api.version>
+    <plugin.tools.version>3.16.0</plugin.tools.version>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>io.github.kastoestoramadus</groupId>
+      <artifactId>hocon-formatter-core_3</artifactId>
+      <version>0.1.0-SNAPSHOT</version>
+    </dependency>
+    <!-- Maven 3.9 stopped putting plexus-utils on plugin classpaths, so it has to be declared. -->
+    <dependency>
+      <groupId>org.codehaus.plexus</groupId>
+      <artifactId>plexus-utils</artifactId>
+      <version>4.0.3</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.maven</groupId>
+      <artifactId>maven-plugin-api</artifactId>
+      <version>${maven.api.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.maven.plugin-tools</groupId>
+      <artifactId>maven-plugin-annotations</artifactId>
+      <version>${plugin.tools.version}</version>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <artifactId>maven-clean-plugin</artifactId>
+          <version>3.5.0</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-resources-plugin</artifactId>
+          <version>3.5.0</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>3.16.0</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>3.5.6</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-jar-plugin</artifactId>
+          <version>3.5.1</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-install-plugin</artifactId>
+          <version>3.2.0</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-deploy-plugin</artifactId>
+          <version>3.2.0</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-plugin-plugin</artifactId>
+          <version>${plugin.tools.version}</version>
+        </plugin>
+        <plugin>
+          <artifactId>maven-invoker-plugin</artifactId>
+          <version>3.10.1</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+
+    <plugins>
+      <plugin>
+        <artifactId>maven-invoker-plugin</artifactId>
+        <configuration>
+          <cloneProjectsTo>${project.build.directory}/it</cloneProjectsTo>
+          <!-- A private repository, so a test run never leaves a half-built plugin in ~/.m2. -->
+          <localRepositoryPath>${project.build.directory}/local-repo</localRepositoryPath>
+          <preBuildHookScript>setup</preBuildHookScript>
+          <postBuildHookScript>verify</postBuildHookScript>
+          <streamLogsOnFailures>true</streamLogsOnFailures>
+        </configuration>
+        <executions>
+          <execution>
+            <id>integration-test</id>
+            <goals>
+              <goal>install</goal>
+              <goal>run</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>
