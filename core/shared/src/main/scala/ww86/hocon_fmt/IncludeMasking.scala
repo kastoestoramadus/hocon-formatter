@@ -2,6 +2,8 @@ package ww86.hocon_fmt
 
 import java.util.regex.{Matcher, Pattern}
 
+import scala.annotation.tailrec
+
 /** Carries `include` directives across a parse-render round trip.
   *
   * sconfig resolves an include while parsing and keeps nothing to render afterwards, so the
@@ -54,6 +56,23 @@ private[hocon_fmt] object IncludeMasking {
     def dropOurs(guard: Matcher) = Option.when(ours(guard.group(1).toInt))("")
     val withoutOwnLineGuards     = replaceEachMatch("\n" + restored, GuardOnItsOwnLine)(dropOurs).drop(1)
     replaceEachMatch(withoutOwnLineGuards, GuardInline)(dropOurs)
+  }
+
+  /** The statements whose placeholder sconfig did not render, in source order. It drops a field
+    * the way it drops everything in an object that a later definition of the same key replaces.
+    */
+  def lost(rendered: String, originals: Map[Int, String]): List[String] = {
+    val matcher = PlaceholderField.matcher(rendered)
+    // Resumes one character past each match, as `replaceEachMatch` does, so a near miss cannot
+    // hide a placeholder that starts inside it.
+    @tailrec
+    def present(from: Int, found: Set[Int]): Set[Int] =
+      if (!matcher.find(from)) found
+      else {
+        val index = matcher.group(1)
+        present(matcher.start + 1, if (index == matcher.group(2)) found + index.toInt else found)
+      }
+    (originals.keySet -- present(0, Set.empty)).toList.sorted.map(originals)
   }
 
   // ---- placeholders --------------------------------------------------------------------------
