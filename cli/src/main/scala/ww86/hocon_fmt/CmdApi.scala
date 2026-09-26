@@ -57,24 +57,28 @@ object CmdApi extends IOApp {
       case Left(help)       => usage(help)
     }
 
-  /** Examines every file, even after an unformatted one is found.
+  /** Examines every file, even after an unformatted one is found, and each file once.
     *
     * Exiting from inside a parallel loop used to kill the JVM mid-iteration, so `--check` could
-    * miss files entirely. Now nothing exits until every outcome is in.
+    * miss files entirely; now nothing exits until every outcome is in. And a file named twice,
+    * however spelled, would be written by two fibers at once, so files are told apart by their
+    * canonical path.
     */
   def examineAll(arguments: Arguments): IO[Run] =
-    arguments.files.parTraverse(examine(_, arguments.checkOnly)).map(Run(_))
+    arguments.files
+      .traverse(file => displayed(file).tupleRight(file))
+      .map(_.distinctBy { case (path, _) => path })
+      .flatMap(_.parTraverse { case (path, file) => examine(file, path, arguments.checkOnly) })
+      .map(Run(_))
 
-  private def examine(file: Path, checkOnly: Boolean): IO[Outcome] =
-    displayed(file).flatMap { path =>
-      Files[IO]
-        .readAll(file)
-        .compile
-        .to(Array)
-        .map(Verdict.of)
-        .flatMap(act(file, path, checkOnly))
-        .handleError(e => Outcome.Unformattable(path, Option(e.getMessage).getOrElse(e.toString)))
-    }
+  private def examine(file: Path, path: String, checkOnly: Boolean): IO[Outcome] =
+    Files[IO]
+      .readAll(file)
+      .compile
+      .to(Array)
+      .map(Verdict.of)
+      .flatMap(act(file, path, checkOnly))
+      .handleError(e => Outcome.Unformattable(path, Option(e.getMessage).getOrElse(e.toString)))
 
   private def act(file: Path, path: String, checkOnly: Boolean)(verdict: Verdict): IO[Outcome] =
     verdict match {
