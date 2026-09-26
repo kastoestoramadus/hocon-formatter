@@ -80,6 +80,23 @@ class SconfigDefectsSpec extends munit.FunSuite with HoconTestSupport {
     }
   }
 
+  // --- Should keep every comment -----------------------------------------------------------------
+  // sconfig attaches a comment to the field after it, so a comment with no field after it has
+  // nowhere to go and is dropped. Comments carry no meaning, so the target is only that the text
+  // survives.
+
+  val commentsWithNoFieldAfter = Map(
+    "after the last field" -> ("a : 1\n# trailing", "trailing"),
+    "last in an object"    -> ("o {\n  a : 1\n  # last in the object\n}", "last in the object")
+  )
+
+  commentsWithNoFieldAfter.foreach { case (name, (raw, comment)) =>
+    test(s"library: a comment $name should survive rendering") {
+      val rendered = raw.renderedByLibrary
+      assert(rendered.contains(comment), s"OPEN sconfig BUG: comment [$comment] dropped: [$rendered]")
+    }
+  }
+
   // --- Should accept what the specification allows -----------------------------------------------
   // These fail at parse time, so there is no rendering to compare: the target is that they parse.
 
