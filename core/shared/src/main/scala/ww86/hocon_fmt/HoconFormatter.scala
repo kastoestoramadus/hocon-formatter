@@ -33,12 +33,11 @@ object HoconFormatter {
   def format(source: String): Either[Refusal, String] =
     for {
       formatted <- attempt(formatOnce(source))(Refusal.NotHocon(_))
-      _         <- readableAgain(formatted)
-      _         <- fixedPoint(formatted)
+      _         <- secondPassAgrees(formatted)
     } yield formatted
 
-  /** Kept separate from [[format]] so the checks there can run another pass without recursing
-    * back through the checks. Throws for input that is not HOCON at all.
+  /** Kept separate from [[format]] so the check there can run another pass without recursing
+    * back through it. Throws for input that is not HOCON at all.
     */
   private def formatOnce(source: String): String = {
     val masked = IncludeMasking.mask(source)
@@ -51,26 +50,16 @@ object HoconFormatter {
     IncludeMasking.unmask(rendered, masked.originals)
   }
 
-  /** The CLI writes on success, so emitting malformed text would replace a valid config with a
-    * broken one.
+  /** Formatting the output again is the whole check. The CLI writes on success, so output that
+    * will not parse again would replace a valid config with a broken one; and a formatter that is
+    * not a fixed point keeps producing diffs on unchanged files. Parsing alone would not do:
+    * sconfig renders an unresolved merge as a comment banner that parses but grows on every pass.
     *
-    * The masked form is what gets parsed. The include statements in the output are the ones just
-    * put back verbatim, and resolving them would reach for the filesystem — which says nothing
-    * about whether the text is well formed, and which sconfig cannot do at all on Scala.js.
+    * The pass parses the masked form. The include statements in the output are the ones just put
+    * back verbatim, and resolving them would reach for the filesystem, which says nothing about
+    * whether the text is well formed and which sconfig cannot do at all on Scala.js.
     */
-  private def readableAgain(formatted: String): Either[Refusal, Unit] =
-    try {
-      ConfigFactory.parseString(IncludeMasking.mask(formatted).text, parseOptions)
-      Right(())
-    } catch {
-      case e: ConfigException.Parse => Left(Refusal.BrokenOutput(e.getMessage))
-      // An include this masker did not recognise can still reach resolution; that is not a
-      // statement about our text either.
-      case _: ConfigException => Right(())
-    }
-
-  /** A formatter that is not a fixed point keeps producing diffs on unchanged files. */
-  private def fixedPoint(formatted: String): Either[Refusal, Unit] =
+  private def secondPassAgrees(formatted: String): Either[Refusal, Unit] =
     attempt(formatOnce(formatted))(Refusal.BrokenOutput(_))
       .filterOrElse(_ == formatted, Refusal.UnstableOutput)
       .map(_ => ())

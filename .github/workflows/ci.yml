@@ -102,3 +102,41 @@ jobs:
       - run: pip install pre-commit
       - name: Hooks end to end
         run: scripts/pre-commit-e2e.sh
+
+  # Report-only: shared runners are too noisy to fail a build on. main keeps the history in
+  # refs/notes/benchmarks; a pull request is compared against it in the job summary.
+  benchmarks:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      BENCH_MACHINE: github-ubuntu-latest
+      # A note is a commit on refs/notes/benchmarks, and a runner has no git identity of its own.
+      GIT_AUTHOR_NAME: github-actions
+      GIT_AUTHOR_EMAIL: github-actions@users.noreply.github.com
+      GIT_COMMITTER_NAME: github-actions
+      GIT_COMMITTER_EMAIL: github-actions@users.noreply.github.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: sbt
+      - uses: sbt/setup-sbt@v1
+      - name: Fetch the history
+        run: git fetch origin refs/notes/benchmarks:refs/notes/benchmarks || echo "no history yet"
+      - name: Measure
+        run: scripts/bench.py run
+      - name: Report
+        run: |
+          {
+            echo '```'
+            scripts/bench.py report --commits 15
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep the history
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: git push origin refs/notes/benchmarks
