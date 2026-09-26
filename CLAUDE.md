@@ -14,8 +14,8 @@ do not treat it as a source of truth.
 ## Commands
 
 ```bash
-sbt test                                        # both runtimes: coreJVM, coreJS, cli
-sbt crossCompile                                # compile only, no Node needed
+sbt test                                        # every runtime: coreJVM, cli, coreJS, coreNative
+sbt crossCompile                                # compile only, no Node or clang needed
 sbt coreJS/test                                 # the Scala.js half on its own
 sbt libraryDefects                              # the red sconfig-bug tests
 
@@ -30,12 +30,13 @@ sbt "cli/runMain ww86.hocon_fmt.CmdApi path/to/file.conf"           # rewrite in
 UPDATE_GOLDEN=1 sbt "coreJVM/testOnly ww86.hocon_fmt.GoldenFileSpec"   # rewrite expected files
 ```
 
-`sbt test` runs both runtimes, so it needs **Node on PATH** (`sudo apt install nodejs`). Without
-it the Scala.js half fails to start rather than being skipped, which is deliberate: a silently
-skipped platform is how a port rots. `sbt crossCompile` checks that everything still compiles and
-links without needing Node.
+`sbt test` runs every runtime, so it needs **Node and clang on PATH** (`sudo apt install nodejs
+clang`). Without them the Scala.js or Scala Native half fails to start rather than being skipped,
+which is deliberate: a silently skipped platform is how a port rots. `sbt crossCompile` checks that
+everything still compiles without needing either.
 
-It runs the three projects in a fixed order — core on the JVM, cli, core on Scala.js — each under
+It runs the four projects in a fixed order — core on the JVM, cli, core on Scala.js, core on Scala
+Native — each under
 its own `==========` banner. sbt otherwise runs aggregated projects concurrently and prints an
 unlabelled `Passed: Total N` for each, with the Scala.js block arriving without the `[info]`
 prefix, so there is no way to tell which runtime produced which result. The cost of ordering them
@@ -60,15 +61,17 @@ it, and have `format` refuse the file so nothing corrupted is written.
 
 Two modules, split along what Scala.js can run:
 
-- **`core`** (`crossProject(JVMPlatform, JSPlatform)`) — formatting proper, no file access and no
+- **`core`** (`crossProject(JVMPlatform, JSPlatform, NativePlatform)`) — formatting proper, no file access and no
   threads. `HoconFormatter` is the pipeline: parse with sconfig, re-render, restore includes,
   refuse anything it cannot read back. `IncludeMasking` is the include round-trip machinery.
 - **`cli`** (JVM only) — `CmdApi`: scopt argument parsing, file reading and writing, parallel
   processing. Everything Scala.js cannot do lives here, which is what keeps `core` portable.
 
-Scala Native is deliberately not a target. Its `java.util.regex` runs on RE2, which rejects
-lookaround, possessive quantifiers and `\G` `\R` `\Z`; adding it back would put that constraint
-on every pattern in `IncludeMasking`. Scala.js has no such limit — it maps to JS RegExp.
+Scala Native runs `java.util.regex` on RE2, which rejects lookaround, backreferences, possessive
+quantifiers and `\G` `\R` `\Z`, so every pattern in `IncludeMasking` must stay within it; the
+suites running on Native enforce that. The include detector uses `\binclude` rather than
+`(?<!\w)include`, and a placeholder's key and value indices are compared in code rather than
+with a `\1` backreference.
 
 ### The include masking — read this before touching `IncludeMasking`
 
@@ -99,13 +102,6 @@ nothing, so an include may share its line with other content.
 deeper fixes needed here were too invasive to land in that library. The remaining gaps are worked
 around in this repo instead. The masking is load-bearing, not accidental cruft — treat a change to
 it as a change to the core algorithm.
-
-### If Scala Native is ever added back
-
-The include detector uses `\binclude\s+` rather than `(?<!\w)include\s+`. The two are
-equivalent here — `include` starts with a word character, so `\b` holds exactly when the
-preceding character is a non-word one or the string start — but only the first is RE2-compatible.
-Keep it that way if Native ever becomes a target; on JVM and Scala.js either would do.
 
 ## Known limitations
 
@@ -168,15 +164,15 @@ escape becomes the literal `A`).
 ## Tests
 
 Six suites, split by concern so a change answers to one place. Which module a suite lives in
-follows from what it touches: anything reading files is JVM-only, the rest is shared and runs on
-both platforms.
+follows from what it touches: anything reading files runs on the JVM and Scala Native, the rest
+is shared and runs on all three platforms.
 
-- **`GoldenFileSpec`** (`core/jvm`) — rendering. Each `<name>.conf` in
-  `core/jvm/src/test/resources` is compared against
+- **`GoldenFileSpec`** (`core/jvm-native`) — rendering. Each `<name>.conf` in
+  `core/jvm-native/src/test/resources` is compared against
   `<name>.expected.conf`. Adding a fixture is a two-file drop, no Scala changes. Regenerate with
   `UPDATE_GOLDEN=1` and read the diff before committing — a golden file is only worth what the
   human who approved it looked at.
-- **`HoconFormatterInvariantsSpec`** (`core/jvm`) — relations holding for every fixture: idempotence
+- **`HoconFormatterInvariantsSpec`** (`core/jvm-native`) — relations holding for every fixture: idempotence
   (`format(format(x)) == format(x)`), output re-parses, meaning preservation
   (`parse(raw) == parse(format(raw))`), and adversarial inputs shaped like the internal
   `__INCLUDE_<n>` and `__INCLUDE_GUARD_<n>` fields.
