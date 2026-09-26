@@ -22,6 +22,8 @@ sbt sbtPluginTest                               # the sbt plugin, scripted (slow
 sbt coreJVM/publishM2 && (cd gradle-plugin && ./gradlew check)   # the Gradle plugin, TestKit
 sbt coreJVM/publishM2 && (cd maven-plugin && ./mvnw verify)      # the Maven plugin, invoker
 scripts/pre-commit-e2e.sh                       # the pre-commit hooks as installed from HEAD
+scripts/bench.py run                            # time each phase on each platform, kept in git notes
+scripts/bench.py report                         # medians per commit, slowdowns flagged
 
 sbt "coreJVM/testOnly ww86.hocon_fmt.IncludeDetectionSpec"
 sbt "coreJVM/testOnly ww86.hocon_fmt.HoconFormatterInvariantsSpec -- *idempotent*"
