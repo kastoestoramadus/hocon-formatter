@@ -40,12 +40,17 @@ object HoconGen {
       level.zipWithIndex.forall { case (node, i) => !node.isInstanceOf[Node.Comment] || i < lastField }
     }
 
-    /** A one-field object holding a substitution, inside an array: sconfig renders it without its
-      * braces (see SconfigDefectsSpec), so the formatter rightly refuses it.
+    /** A one-field object inside an array that cannot be rendered on one line, because it holds a
+      * substitution, or its field is an object and it holds a comment: sconfig renders it without
+      * its braces (see SconfigDefectsSpec), so the formatter rightly refuses it.
       */
     def hitsKnownSconfigDefect: Boolean = arrayItems(nodes).exists {
-      case Value.Object(inner) => inner.count(_.isInstanceOf[Node.Field]) == 1 && holdsSubstitution(inner)
-      case _                   => false
+      case Value.Object(inner) =>
+        inner.collect { case field: Node.Field => field } match {
+          case List(field) => holdsSubstitution(inner) || (isObjectValued(field) && holdsComment(inner))
+          case _           => false
+        }
+      case _ => false
     }
 
     override def toString: String = s"\n$text"
@@ -103,6 +108,12 @@ object HoconGen {
       case _                       => false
     }
   }
+
+  def holdsComment(nodes: List[Node]): Boolean = collect(nodes) { case c: Node.Comment => c }.nonEmpty
+
+  // A dotted key is an object holding the rest of the path.
+  def isObjectValued(field: Node.Field): Boolean =
+    field.value.isInstanceOf[Value.Object] || (!field.key.startsWith("\"") && field.key.contains('.'))
 
   def collect[A](nodes: List[Node])(pick: PartialFunction[Node, A]): List[A] =
     lists(nodes).flatten.collect(pick)
