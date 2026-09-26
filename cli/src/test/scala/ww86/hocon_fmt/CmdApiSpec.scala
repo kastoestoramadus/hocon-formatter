@@ -74,4 +74,14 @@ class CmdApiSpec extends munit.FunSuite with HoconTestSupport {
     assertEquals(code, 0)
     assert(out.contains("cannot format, leaving unchanged"), out)
   }
+
+  // A lenient decode turns each invalid byte into U+FFFD, and writing that back destroys it.
+  tmp.test("write mode leaves a file that is not UTF-8 byte-for-byte untouched") { dir =>
+    val latin2 = "a   :   \"³\"\n".getBytes(StandardCharsets.ISO_8859_1) // ł in ISO-8859-2
+    val f      = new File(dir, "a.conf")
+    Files.write(f.toPath, latin2)
+    val (_, out) = runCapturing(InputArguments(List(f.getPath), checkOnly = false))
+    assertEquals(Files.readAllBytes(f.toPath).toSeq, latin2.toSeq)
+    assert(out.contains("cannot format, leaving unchanged"), out)
+  }
 }

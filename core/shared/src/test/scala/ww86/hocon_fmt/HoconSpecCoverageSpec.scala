@@ -1,7 +1,5 @@
 package ww86.hocon_fmt
 
-import ww86.hocon_fmt.HoconFormatter.*
-
 /** Coverage of the HOCON specification, as seen through `HoconFormatter.format`.
   *
   * Everything here exercises our pipeline, so every test is named `formatter:`. Where the
@@ -27,36 +25,32 @@ class HoconSpecCoverageSpec extends munit.FunSuite with HoconTestSupport {
   val mustRefuse = Map(
     "+= field separator"            -> "a : [1]\na += 2",
     "+= field separator, nested"    -> "o { a : [1]\na += 2 }",
-    "self-referential substitution" -> "a : 1\na : ${a}"
+    "self-referential substitution" -> "a : 1\na : ${a}",
+    // From the specification's "Array and object concatenation" examples.
+    "array self-concatenation" -> "a : [ 1, 2 ]\na : ${a} [ 3, 4 ]"
   )
 
   mustRefuse.foreach { case (name, raw) =>
     test(s"formatter: refuses rather than corrupts: $name") {
       assert(raw.parses.isSuccess, s"the fixture itself must be valid HOCON: $raw")
-      assert(
-        format(raw).isFailure,
-        s"$name: formatter reported success but the output cannot be parsed back"
-      )
+      refusalOf(raw) match {
+        case Refusal.BrokenOutput(_) => ()
+        case other                   => fail(s"$name: refused for the wrong reason: ${other.reason}")
+      }
     }
   }
 
-  // Examples taken verbatim from the HOCON specification. A repeated key whose later definition
-  // substitutes the earlier one renders as an unresolved-merge banner: it parses, so the
-  // output check passes, but it is not a fixed point - a second pass changes it again.
+  // Taken verbatim from the HOCON specification. The cycle renders as an unresolved-merge
+  // banner: it parses, so the output check passes, but a second pass changes it again.
   val specSelfReference = Map(
     "substitution cycle (Examples of Self-Referential Substitutions)" ->
-      "a : 1\nb : 2\na : ${b}\nb : ${a}",
-    "array self-concatenation (Array and object concatenation)" ->
-      "a : [ 1, 2 ]\na : ${a} [ 3, 4 ]"
+      "a : 1\nb : 2\na : ${b}\nb : ${a}"
   )
 
   specSelfReference.foreach { case (name, raw) =>
     test(s"formatter: refuses output that is not a fixed point: $name") {
       assert(raw.parses.isSuccess, s"the fixture itself must be valid HOCON: $raw")
-      assert(
-        format(raw).isFailure,
-        s"$name: output parses but a second pass changes it again"
-      )
+      assertEquals(refusalOf(raw), Refusal.UnstableOutput, s"$name: refused for the wrong reason")
     }
   }
 
