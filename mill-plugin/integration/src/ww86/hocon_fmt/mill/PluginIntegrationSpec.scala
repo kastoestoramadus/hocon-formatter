@@ -1,9 +1,14 @@
 package ww86.hocon_fmt.mill
 
+import scala.concurrent.duration.*
+
 import mill.testkit.IntegrationTester
 
 /** A real Mill, loading the plugin the way a user's build does, from `//| mvnDeps`. */
 class PluginIntegrationSpec extends munit.FunSuite {
+
+  // On a fresh machine the first command downloads the Mill under test and the JVM it runs on.
+  override val munitTimeout: Duration = 10.minutes
 
   val build = s"""//| mvnDeps:
                  |//| - ${sys.env("PLUGIN_UNDER_TEST")}
