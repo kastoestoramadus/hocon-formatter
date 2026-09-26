@@ -1,8 +1,8 @@
 import scala.scalanative.build.{LTO, Mode}
 
-val scala3  = "3.8.2"
-val sconfig = "1.12.4"
-val munit   = "1.2.4"
+val scala3    = "3.8.2"
+val sconfig   = "1.12.4"
+val munit     = "1.2.4"
 val sjavatime = "1.5.0"
 
 val catsEffect      = "3.7.1"
@@ -16,11 +16,11 @@ ThisBuild / version      := "0.1.0-SNAPSHOT"
 
 // Coordinates and the metadata Sonatype requires before anything can reach Maven Central,
 // which is what `cs` and therefore the pre-commit coursier hook resolve from.
-ThisBuild / organization         := "io.github.kastoestoramadus"
-ThisBuild / organizationName     := "kastoestoramadus"
-ThisBuild / homepage             := Some(url("https://github.com/kastoestoramadus/hocon-formatter"))
-ThisBuild / licenses             := Seq("GPL-3.0" -> url("https://www.gnu.org/licenses/gpl-3.0.html"))
-ThisBuild / scmInfo := Some(
+ThisBuild / organization     := "io.github.kastoestoramadus"
+ThisBuild / organizationName := "kastoestoramadus"
+ThisBuild / homepage         := Some(url("https://github.com/kastoestoramadus/hocon-formatter"))
+ThisBuild / licenses         := Seq("GPL-3.0" -> url("https://www.gnu.org/licenses/gpl-3.0.html"))
+ThisBuild / scmInfo          := Some(
   ScmInfo(
     url("https://github.com/kastoestoramadus/hocon-formatter"),
     "scm:git:https://github.com/kastoestoramadus/hocon-formatter.git"
@@ -46,20 +46,21 @@ def announceRuntime(label: String): Setting[?] =
 lazy val root = project
   .in(file("."))
   // Aggregation drives compile, scalafmt and the rest.
-  .aggregate(coreJVM, coreJS, coreNative, cliJVM, cliJS, cliNative, benchJVM, benchJS, benchNative, sbtPlugin)
+  .aggregate(coreJVM, coreJS, coreNative, cliJVM, cliJS, cliNative, web, benchJVM, benchJS, benchNative, sbtPlugin)
   .settings(
-    name := "hocon-formatter",
+    name           := "hocon-formatter",
     publish / skip := true,
     // `test` is spelled out instead of aggregated: aggregated projects run concurrently, and
     // their summaries then arrive unlabelled and interleaved, with no way to tell which runtime
     // produced which. Running them in order keeps each banner next to its own result.
     Test / test / aggregate := false,
-    Test / test := Def
+    Test / test             := Def
       .sequential(
         coreJVM / Test / test,
         cliJVM / Test / test,
         coreJS / Test / test,
         cliJS / Test / test,
+        web / Test / test,
         coreNative / Test / test,
         cliNative / Test / test
       )
@@ -76,9 +77,9 @@ lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .settings(
     name := "hocon-formatter-core",
     libraryDependencies ++= Seq(
-      "org.ekrich"    %%% "sconfig" % sconfig,
-      "org.scalameta" %%% "munit"            % munit            % Test,
-      "org.scalameta" %%% "munit-scalacheck" % munitScalaCheck  % Test
+      "org.ekrich"    %%% "sconfig"          % sconfig,
+      "org.scalameta" %%% "munit"            % munit           % Test,
+      "org.scalameta" %%% "munit-scalacheck" % munitScalaCheck % Test
     ),
     // SconfigDefectsSpec asserts what sconfig *should* do, so it is red while those upstream bugs
     // are open. Scoped to the `test` task only, so `testOnly` can still run it on demand.
@@ -156,9 +157,31 @@ lazy val cliJVM    = cli.jvm
 lazy val cliJS     = cli.js
 lazy val cliNative = cli.native
 
+/** The formatter as a script for web pages, behind the playground: one global, `HoconFormatter`,
+  * with a small JavaScript API; see docs/playground.md. A classic script rather than an ES module,
+  * so a page that loads it works from `file://` as well.
+  */
+lazy val web = project
+  .in(file("web"))
+  .enablePlugins(ScalaJSPlugin, BuildInfoPlugin)
+  .dependsOn(coreJS)
+  .settings(
+    name           := "hocon-formatter-web",
+    publish / skip := true,
+    announceRuntime("web on Scala.js"),
+    libraryDependencies ++= Seq(
+      "org.ekrich"    %%% "sjavatime" % sjavatime,
+      "org.scalameta" %%% "munit"     % munit % Test
+    ),
+    buildInfoPackage := "ww86.hocon_fmt.web",
+    buildInfoKeys    := Seq[BuildInfoKey](version),
+    // The tests run the optimised script a page loads, where only exported names survive.
+    Test / scalaJSStage := FullOptStage
+  )
+
 addCommandAlias(
   "crossCompile",
-  Seq(coreJVM, coreJS, coreNative, cliJVM, cliJS, cliNative)
+  Seq(coreJVM, coreJS, coreNative, cliJVM, cliJS, cliNative, web)
     .map(p => s"${p.id}/Test/compile")
     .mkString("; ")
 )
@@ -210,7 +233,7 @@ lazy val sbtPlugin = project
     // The coordinates the plugin resolves the formatter by, so the two are released in lockstep.
     buildInfoPackage := "ww86.hocon_fmt.sbt",
     buildInfoObject  := "FormatterArtifact",
-    buildInfoKeys := Seq[BuildInfoKey](
+    buildInfoKeys    := Seq[BuildInfoKey](
       "organization" -> (coreJVM / organization).value,
       "name"         -> s"${(coreJVM / moduleName).value}_${(coreJVM / scalaBinaryVersion).value}",
       "version"      -> (coreJVM / version).value,
