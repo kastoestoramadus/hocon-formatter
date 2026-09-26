@@ -33,6 +33,9 @@ gradlePlugin {
 val functionalTestSourceSet = sourceSets.create("functionalTest")
 
 dependencies {
+    // Compile only: at run time the formatter is resolved in the consumer's build and loaded in an
+    // isolated worker class loader, so its Scala library never lands on the buildscript classpath.
+    compileOnly("io.github.kastoestoramadus:hocon-formatter-core_3:$version")
     "functionalTestImplementation"(platform("org.junit:junit-bom:6.0.1"))
     "functionalTestImplementation"("org.junit.jupiter:junit-jupiter")
     "functionalTestRuntimeOnly"("org.junit.platform:junit-platform-launcher")
@@ -54,4 +57,13 @@ gradlePlugin.testSourceSets.add(functionalTestSourceSet)
 
 tasks.check {
     dependsOn(functionalTest)
+}
+
+// The plugin asks for the core by these coordinates, so the two are released in lockstep.
+tasks.processResources {
+    val coordinates = "${project.group}:hocon-formatter-core_3:${project.version}"
+    inputs.property("coordinates", coordinates)
+    filesMatching("**/formatter.properties") {
+        expand("coordinates" to coordinates)
+    }
 }
