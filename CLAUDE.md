@@ -63,7 +63,9 @@ Two modules, split along what Scala.js can run:
 
 - **`core`** (`crossProject(JVMPlatform, JSPlatform, NativePlatform)`) — formatting proper, no file access and no
   threads. `HoconFormatter` is the pipeline: parse with sconfig, re-render, restore includes,
-  refuse anything it cannot read back. `IncludeMasking` is the include round-trip machinery.
+  refuse anything it cannot read back, as `Either[Refusal, String]`. `Verdict` decides what
+  happens to one file's bytes, decoding them strictly as UTF-8; every caller acts on it, and
+  `JvmFacade` offers it in JDK types. `IncludeMasking` is the include round-trip machinery.
 - **`cli`** (JVM only) — `CmdApi`: scopt argument parsing, file reading and writing, parallel
   processing. Everything Scala.js cannot do lives here, which is what keeps `core` portable.
 
@@ -109,7 +111,7 @@ it as a change to the core algorithm.
 
 Each of these is reproduced with a bare sconfig parse-render round trip, with no code of ours
 involved — they are library bugs, not ours. `format` verifies its own output and returns a
-`Failure` so `CmdApi` leaves the file untouched.
+`Refusal` saying why, so no caller writes the file.
 
 Each one has a **failing** test in `SconfigDefectsSpec` asserting the output sconfig ought to
 produce. The expected text is not guessed: each case is paired with a plainly written config that
