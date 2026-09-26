@@ -40,6 +40,7 @@ class VerdictSpec extends munit.FunSuite with HoconTestSupport {
       Refusal.NotUtf8,
       Refusal.NotHocon("detail"),
       Refusal.BrokenOutput("detail"),
+      Refusal.LostComment("detail"),
       Refusal.UnstableOutput
     )
     refusals.foreach(r => assert(r.reason.nonEmpty, s"$r has no reason"))
