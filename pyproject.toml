@@ -1,0 +1,14 @@
+# pre-commit installs a Python hook repository with `pip install .`; this makes that an empty
+# package. The formatter is the hocon-formatter wheel named in .pre-commit-hooks.yaml.
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hocon-formatter-pre-commit-hooks"
+version = "0"
+requires-python = ">=3.8"
+
+[tool.setuptools]
+packages = []
+py-modules = []

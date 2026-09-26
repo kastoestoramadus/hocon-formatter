@@ -1,0 +1,7 @@
+{
+  "name": "hocon-formatter-pre-commit-hooks",
+  "private": true,
+  "description": "Makes this repository installable as pre-commit hooks for Node; the formatter is the hocon-formatter npm package named in .pre-commit-hooks.yaml.",
+  "license": "GPL-3.0-only",
+  "files": []
+}
