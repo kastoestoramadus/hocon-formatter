@@ -1,0 +1,36 @@
+# The primary hooks run the Scala Native binary, installed from the hocon-formatter wheel on PyPI
+# as ruff's hooks install ruff: pre-commit itself runs on Python, so they need nothing else, and
+# they install at hook-install time, which pre-commit.ci requires.
+- id: hocon-formatter
+  name: Format HOCON files
+  description: Rewrites HOCON files that are not formatted. Files it cannot format safely are left alone.
+  entry: hocon-formatter
+  language: python
+  additional_dependencies: ["hocon-formatter==0.1.0"]
+  files: \.(conf|hocon)$
+
+- id: hocon-formatter-check
+  name: Check HOCON formatting
+  description: Fails when a HOCON file is not formatted. Writes nothing.
+  entry: hocon-formatter --check
+  language: python
+  additional_dependencies: ["hocon-formatter==0.1.0"]
+  files: \.(conf|hocon)$
+
+# The same hooks on the Node build, for platforms without a native wheel, such as Windows. About
+# twice as slow per run, and pre-commit downloads a Node of its own, over 200 MB.
+- id: hocon-formatter-node
+  name: Format HOCON files (Node)
+  description: Rewrites HOCON files that are not formatted. Files it cannot format safely are left alone.
+  entry: hocon-formatter
+  language: node
+  additional_dependencies: ["hocon-formatter@0.1.0"]
+  files: \.(conf|hocon)$
+
+- id: hocon-formatter-check-node
+  name: Check HOCON formatting (Node)
+  description: Fails when a HOCON file is not formatted. Writes nothing.
+  entry: hocon-formatter --check
+  language: node
+  additional_dependencies: ["hocon-formatter@0.1.0"]
+  files: \.(conf|hocon)$
