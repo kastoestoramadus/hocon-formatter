@@ -52,3 +52,6 @@ hs_err_pid*
 __pycache__/
 *.egg-info/
 /build/
+
+# Mill (mill-plugin/)
+/mill-plugin/out/
