@@ -162,7 +162,11 @@ addCommandAlias(
     .map(p => s"${p.id}/Test/compile")
     .mkString("; ")
 )
-addCommandAlias("libraryDefects", "coreJVM/testOnly ww86.hocon_fmt.SconfigDefectsSpec")
+// On every platform: sconfig's Scala.js and Scala Native builds have defects of their own.
+addCommandAlias(
+  "libraryDefects",
+  Seq(coreJVM, coreJS, coreNative).map(p => s"${p.id}/testOnly ww86.hocon_fmt.SconfigDefectsSpec").mkString("; ")
+)
 
 /** Timings of each formatter phase on each platform; see `scripts/bench.py`. Not published. The
   * mutable loop in `Bench.measure` is deliberate: an allocation-free timing loop is the one place

@@ -11,7 +11,8 @@ import org.ekrich.config.ConfigRenderOptions
   * `HoconSpecCoverageSpec`).
   *
   * Each test asserts what sconfig *should* do, so it is RED while the bug is open. They are
-  * therefore excluded from `sbt test` and from CI, and run on demand:
+  * therefore excluded from `sbt test` and from CI, and run on demand, on every platform, since
+  * sconfig's Scala.js and Scala Native builds have defects of their own:
   *
   * {{{ sbt libraryDefects }}}
   *
@@ -95,6 +96,16 @@ class SconfigDefectsSpec extends munit.FunSuite with HoconTestSupport {
       val rendered = raw.renderedByLibrary
       assert(rendered.contains(comment), s"OPEN sconfig BUG: comment [$comment] dropped: [$rendered]")
     }
+  }
+
+  // --- Should read back what it renders, on every platform ----------------------------------------
+
+  // On Scala.js, rendering an object nested 32 or more deep gives text that fails to parse with
+  // "empty path"; 31 is fine, as is a 32-segment dotted path. The JVM and Native builds are fine.
+  test("library: an object nested 40 deep should render as text that parses back") {
+    val nested   = (0 until 40).map(i => s"k$i { ").mkString + "v = 1" + " }" * 40
+    val rendered = nested.renderedByLibrary
+    assert(rendered.parses.isSuccess, s"OPEN sconfig BUG: rendered text does not parse: ${rendered.parses}")
   }
 
   // --- Should accept what the specification allows -----------------------------------------------
