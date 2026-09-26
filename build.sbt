@@ -120,7 +120,9 @@ lazy val cli = crossProject(JVMPlatform, JSPlatform, NativePlatform)
     announceRuntime("cli on the JVM"),
     Compile / mainClass := Some("ww86.hocon_fmt.CmdApi"),
     // IOApp ends with System.exit, which must end a forked JVM and not sbt.
-    run / fork := true
+    run / fork := true,
+    // A forked run starts in the project's directory; relative paths mean the one sbt runs in.
+    run / baseDirectory := (ThisBuild / baseDirectory).value
   )
   .jsSettings(
     announceRuntime("cli on Scala.js"),
