@@ -47,3 +47,8 @@ hs_err_pid*
 # Gradle (gradle-plugin/)
 /gradle-plugin/.gradle/
 /gradle-plugin/build/
+
+# Python (pre-commit hook packaging)
+__pycache__/
+*.egg-info/
+/build/
