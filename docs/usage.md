@@ -89,6 +89,30 @@ hoconFormatter {
 files nor the formatter change. To pin another formatter version:
 `dependencies { hoconFormatter("io.github.kastoestoramadus:hocon-formatter-core_3:<version>") }`.
 
+## Mill
+
+```scala
+//| mvnDeps:
+//| - io.github.kastoestoramadus::mill-hocon-formatter::0.1.0
+package build
+
+import mill.*, javalib.*
+import ww86.hocon_fmt.mill.HoconFormatterModule
+
+object app extends JavaModule, HoconFormatterModule {
+  object test extends JavaTests, TestModule.Junit5, HoconFormatterModule
+}
+```
+
+`./mill __.hoconFormat` rewrites; `./mill __.hoconFormatCheck` fails on an unformatted file. Mill
+1.1.4 or newer. The trait covers the module it is mixed into, so a test module needs it too.
+`hoconFormatSources`, the module's `resources` by default, lists directories to search for
+`*.conf` and `*.hocon`, or single files:
+
+```scala
+override def hoconFormatSources = Task.Sources("conf")
+```
+
 ## Maven
 
 ```xml

@@ -13,8 +13,10 @@ sbt scalafmtAll           # format; CI runs scalafmtCheckAll
 sbt libraryDefects        # SconfigDefectsSpec on every platform: red by design, 13 (JVM, Native), 14 (JS)
 sbt sbtPluginTest         # sbt plugin, scripted (slow: a fresh sbt per test)
 sbt coreJVM/publishM2     # needed before the Gradle and Maven builds
+sbt coreJVM/publishLocal  # needed before the Mill build
 (cd gradle-plugin && ./gradlew check)
 (cd maven-plugin && ./mvnw verify)
+(cd mill-plugin && ./mill __.testForked)
 scripts/pre-commit-e2e.sh # pre-commit hooks as installed from HEAD; needs pre-commit and python3
 scripts/bench.py run      # time every phase on every platform, attach to HEAD in git notes
 scripts/bench.py report   # medians per commit, slowdowns flagged
@@ -32,7 +34,7 @@ platform is how a port rots.
 ## Layout
 
 `core` (pure formatting, sconfig only) · `cli` (cats-effect `IOApp`) · `sbt-plugin` (Scala 2.12)
-· `gradle-plugin`, `maven-plugin` (standalone Java builds) · `npm/` (package template) · `python/`
+· `gradle-plugin`, `maven-plugin` (standalone Java builds) · `mill-plugin` (standalone Mill build) · `npm/` (package template) · `python/`
 (wheel carrying the native binary) · `bench` · `.pre-commit-hooks.yaml`. Details and the reasons
 behind them: [docs/architecture.md](docs/architecture.md).
 
@@ -51,10 +53,11 @@ behind them: [docs/architecture.md](docs/architecture.md).
   output check parses the *masked* text: sconfig cannot parse an `include` on Scala.js, so do not
   simplify it to parse the finished text.
 - **`core` depends on sconfig only.** The plugins load it into sbt, Gradle and Maven; effects and
-  libraries belong in `cli`. `JvmFacade` is the JDK-typed boundary the plugins share.
+  libraries belong in `cli`. `JvmFacade` is the JDK-typed boundary the sbt, Gradle and Maven
+  plugins share; Mill runs Scala 3, and its plugin matches on `Verdict`.
 - **Do not "fix" the intentional normalisations** (`//` to `#`, `=` to `:`, flattened paths, …)
   listed in [docs/limitations.md](docs/limitations.md).
-- **One version everywhere**: see [docs/releasing.md](docs/releasing.md) for the four places.
+- **One version everywhere**: see [docs/releasing.md](docs/releasing.md) for the five places.
 
 ## Conventions
 
