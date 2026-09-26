@@ -21,11 +21,12 @@ private[hocon_fmt] object IncludeMasking {
     val masked     = new StringBuilder
     val originals  = Map.newBuilder[Int, String]
     val keywords   = IncludeKeyword.matcher(source)
+    val nonCode    = HoconText.spans(source)
     var copiedUpTo = 0
     var nextIndex  = 0
 
     while (keywords.find())
-      if (keywords.start >= copiedUpTo && !isInsideStringLiteral(source, keywords.start))
+      if (keywords.start >= copiedUpTo && HoconText.isCode(nonCode, keywords.start))
         targetAfterKeyword(source, keywords.end).foreach { target =>
           masked.append(source.substring(copiedUpTo, keywords.start))
           masked.append(placeholderFor(nextIndex))
@@ -46,10 +47,12 @@ private[hocon_fmt] object IncludeMasking {
       Option.when(sameIndex)(field.group(1).toInt).flatMap(originals.get)
     }
     // Own-line first: it consumes the newline and indentation, which the inline pattern leaves
-    // behind. The other order turns every guard on its own line into a blank one.
+    // behind. The other order turns every guard on its own line into a blank one. sconfig may
+    // render a guard on the very first line, with no newline before it, so one is lent for the
+    // pass; a multiline `^` would do instead, but Scala.js supports it only from ES2018.
     val ours                     = originals.keySet
     def dropOurs(guard: Matcher) = Option.when(ours(guard.group(1).toInt))("")
-    val withoutOwnLineGuards     = replaceEachMatch(restored, GuardOnItsOwnLine)(dropOurs)
+    val withoutOwnLineGuards     = replaceEachMatch("\n" + restored, GuardOnItsOwnLine)(dropOurs).drop(1)
     replaceEachMatch(withoutOwnLineGuards, GuardInline)(dropOurs)
   }
 
@@ -170,22 +173,5 @@ private[hocon_fmt] object IncludeMasking {
         case _ => i += 1
       }
     None
-  }
-
-  /** Whether `position` falls inside a quoted or triple-quoted literal. */
-  private def isInsideStringLiteral(source: String, position: Int): Boolean = {
-    var inside = false
-    var i      = 0
-    while (i < position && i < source.length) {
-      if (source.charAt(i) == '"') {
-        val isTripleQuote =
-          i + 2 < source.length && source.charAt(i + 1) == '"' && source.charAt(i + 2) == '"'
-        val isEscaped = i > 0 && source.charAt(i - 1) == '\\'
-        if (isTripleQuote) { inside = !inside; i += 2 }
-        else if (!isEscaped) inside = !inside
-      }
-      i += 1
-    }
-    inside
   }
 }
