@@ -40,6 +40,14 @@ object HoconGen {
       level.zipWithIndex.forall { case (node, i) => !node.isInstanceOf[Node.Comment] || i < lastField }
     }
 
+    /** A one-field object holding a substitution, inside an array: sconfig renders it without its
+      * braces (see SconfigDefectsSpec), so the formatter rightly refuses it.
+      */
+    def hitsKnownSconfigDefect: Boolean = arrayItems(nodes).exists {
+      case Value.Object(inner) => inner.count(_.isInstanceOf[Node.Field]) == 1 && holdsSubstitution(inner)
+      case _                   => false
+    }
+
     override def toString: String = s"\n$text"
   }
 
@@ -70,6 +78,30 @@ object HoconGen {
     case Value.Object(nodes) => lists(nodes)
     case Value.Array(items)  => items.flatMap(listsIn)
     case Value.Scalar(_)     => Nil
+  }
+
+  def arrayItems(nodes: List[Node]): List[Value] = {
+    def in(value: Value): List[Value] = value match {
+      case Value.Array(items)  => items ++ items.flatMap(in)
+      case Value.Object(inner) => arrayItems(inner)
+      case Value.Scalar(_)     => Nil
+    }
+    nodes.flatMap {
+      case Node.Field(_, _, value) => in(value)
+      case _                       => Nil
+    }
+  }
+
+  def holdsSubstitution(nodes: List[Node]): Boolean = {
+    def in(value: Value): Boolean = value match {
+      case Value.Scalar(text)  => text.startsWith("${")
+      case Value.Array(items)  => items.exists(in)
+      case Value.Object(inner) => holdsSubstitution(inner)
+    }
+    nodes.exists {
+      case Node.Field(_, _, value) => in(value)
+      case _                       => false
+    }
   }
 
   def collect[A](nodes: List[Node])(pick: PartialFunction[Node, A]): List[A] =

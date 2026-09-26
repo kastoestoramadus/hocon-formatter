@@ -108,6 +108,14 @@ class SconfigDefectsSpec extends munit.FunSuite with HoconTestSupport {
     assert(rendered.parses.isSuccess, s"OPEN sconfig BUG: rendered text does not parse: ${rendered.parses}")
   }
 
+  // Found by FormatterPropertiesSpec. A one-field object holding a substitution loses its braces
+  // inside an array, `a : [ { b : ${?X} } ]` becoming `a: [ b: ${?X} ]`; two fields, or no
+  // substitution, keep them.
+  test("library: a one-field object holding a substitution in an array should render as text that parses back") {
+    val rendered = "a : [ { b : ${?X} } ]".renderedByLibrary
+    assert(rendered.parses.isSuccess, s"OPEN sconfig BUG: rendered text does not parse: [$rendered]")
+  }
+
   // --- Should accept what the specification allows -----------------------------------------------
   // These fail at parse time, so there is no rendering to compare: the target is that they parse.
 
