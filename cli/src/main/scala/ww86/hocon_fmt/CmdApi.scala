@@ -1,40 +1,35 @@
 package ww86.hocon_fmt
 
-import java.io.File
-import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Path}
-import scala.collection.parallel.CollectionConverters.*
-import scala.util.{Failure, Success, Try}
+import cats.effect.std.Console
+import cats.effect.{ExitCode, IO, IOApp}
+import cats.syntax.all.*
+import com.monovore.decline.{Command, Help, Opts, PlatformApp}
+import fs2.Stream
+import fs2.io.file.{Files, Path}
 
-import scopt.OptionParser
-
-/** Command line entry point: reads files, hands their text to [[HoconFormatter]], and either
-  * reports or rewrites.
+/** Command line entry point: reads files, asks [[Verdict]] what each should become, and either
+  * reports or rewrites. The same code runs as a native binary, a Node script and a JVM program.
   */
-object CmdApi {
+object CmdApi extends IOApp {
 
-  case class InputArguments(files: List[String] = Nil, checkOnly: Boolean = false)
+  final case class Arguments(files: List[Path], checkOnly: Boolean)
 
-  def main(args: Array[String]): Unit =
-    argumentParser.parse(args, InputArguments()) match {
-      case Some(inputs) => sys.exit(examineAll(inputs))
-      case None         =>
-        throw new IllegalArgumentException(s"Error in parsing arguments : ${args.mkString(" ")}")
+  val command: Command[Arguments] =
+    Command(
+      name = "hocon-formatter",
+      header = "Formats HOCON files in place. Files it cannot format safely are left alone."
+    ) {
+      (
+        Opts.arguments[String]("file").map(_.toList.map(Path(_))),
+        Opts
+          .flag(
+            "check",
+            "Report unformatted files instead of rewriting them; exit 1 if any are found.",
+            short = "c"
+          )
+          .orFalse
+      ).mapN(Arguments.apply)
     }
-
-  private val argumentParser = new OptionParser[InputArguments]("hocon-formatter") {
-    head("Formatter of HOCON config files.")
-
-    arg[String]("<file>...")
-      .unbounded()
-      .action((file, args) => args.copy(files = file :: args.files))
-      .text("One or more HOCON files to format. Files that cannot be formatted are left alone.")
-
-    opt[Unit]('c', "check")
-      .optional()
-      .action((_, args) => args.copy(checkOnly = true))
-      .text("Report unformatted files instead of rewriting them; exits non-zero if any are found.")
-  }
 
   enum Outcome {
     case Rewritten(path: String)
@@ -43,50 +38,70 @@ object CmdApi {
     case Unformattable(path: String, reason: String)
   }
 
-  /** Examines every file, reports once, and returns the process exit code.
-    *
-    * Every file is examined even after an unformatted one is found. Exiting from inside the
-    * parallel loop used to kill the JVM mid-iteration, so `--check` could miss files entirely and
-    * the reports of the ones it did reach raced each other onto stdout.
-    */
-  def examineAll(inputs: InputArguments): Int = {
-    val files = inputs.files.map(new File(_))
-    println(s"Running HOCON formatter for ${files.length} files.")
-
-    val outcomes = files.par.map(examine(_, inputs.checkOnly)).toList
-    outcomes.foreach(report)
+  /** Every file's outcome, and what the process prints and exits with because of them. */
+  final case class Run(outcomes: List[Outcome]) {
 
     // 1 rather than -1: an exit status is a byte, so -1 would reach the shell as 255.
-    if (outcomes.exists(_.isInstanceOf[Outcome.NeedsFormatting])) 1 else 0
+    def exitCode: ExitCode =
+      if (outcomes.exists { case _: Outcome.NeedsFormatting => true; case _ => false }) ExitCode(1)
+      else ExitCode.Success
+
+    def rendered: String =
+      (s"Running HOCON formatter for ${outcomes.size} files.\n" :: outcomes.map(render)).mkString
   }
 
-  private def examine(file: File, checkOnly: Boolean): Outcome = {
-    val path = file.getCanonicalPath
-    Try(Files.readAllBytes(file.toPath)).map(Verdict.of) match {
-      case Failure(e)                                               => Outcome.Unformattable(path, e.getMessage)
-      case Success(Verdict.Refused(refusal))                        => Outcome.Unformattable(path, refusal.reason.take(120))
-      case Success(Verdict.AlreadyFormatted)                        => Outcome.AlreadyFormatted(path)
-      case Success(Verdict.NeedsFormatting(formatted)) if checkOnly =>
-        Outcome.NeedsFormatting(path, formatted)
-      case Success(Verdict.NeedsFormatting(formatted)) =>
-        overwrite(file, formatted)
-        Outcome.Rewritten(path)
+  // Scala.js hands `main` no arguments; under Node they are in `process.argv`.
+  override def run(args: List[String]): IO[ExitCode] =
+    command.parse(PlatformApp.ambientArgs.getOrElse(args)) match {
+      case Right(arguments) => examineAll(arguments).flatTap(run => IO.print(run.rendered)).map(_.exitCode)
+      case Left(help)       => usage(help)
     }
-  }
 
-  private def report(outcome: Outcome): Unit = outcome match {
+  /** Examines every file, even after an unformatted one is found.
+    *
+    * Exiting from inside a parallel loop used to kill the JVM mid-iteration, so `--check` could
+    * miss files entirely. Now nothing exits until every outcome is in.
+    */
+  def examineAll(arguments: Arguments): IO[Run] =
+    arguments.files.parTraverse(examine(_, arguments.checkOnly)).map(Run(_))
+
+  private def examine(file: Path, checkOnly: Boolean): IO[Outcome] =
+    displayed(file).flatMap { path =>
+      Files[IO]
+        .readAll(file)
+        .compile
+        .to(Array)
+        .map(Verdict.of)
+        .flatMap(act(file, path, checkOnly))
+        .handleError(e => Outcome.Unformattable(path, Option(e.getMessage).getOrElse(e.toString)))
+    }
+
+  private def act(file: Path, path: String, checkOnly: Boolean)(verdict: Verdict): IO[Outcome] =
+    verdict match {
+      case Verdict.NeedsFormatting(formatted) if checkOnly => IO.pure(Outcome.NeedsFormatting(path, formatted))
+      case Verdict.NeedsFormatting(formatted)              => overwrite(file, formatted).as(Outcome.Rewritten(path))
+      case Verdict.AlreadyFormatted                        => IO.pure(Outcome.AlreadyFormatted(path))
+      case Verdict.Refused(refusal)                        => IO.pure(Outcome.Unformattable(path, refusal.reason.take(120)))
+    }
+
+  private def overwrite(file: Path, content: String): IO[Unit] =
+    Stream.emit(content).through(Files[IO].writeUtf8(file)).compile.drain
+
+  // The canonical path, so a report names one file one way; a missing file has none.
+  private def displayed(file: Path): IO[String] =
+    Files[IO].realPath(file).handleError(_ => file.absolute).map(_.toString)
+
+  private def render(outcome: Outcome): String = outcome match {
     case Outcome.Unformattable(path, reason) =>
-      println(s"ERROR: cannot format, leaving unchanged: $path ($reason)")
+      s"ERROR: cannot format, leaving unchanged: $path ($reason)\n"
     case Outcome.NeedsFormatting(path, formatted) =>
-      println(s"Found a not formatted file: $path .")
-      println(s"After formatting:\n$formatted\n")
-    case Outcome.AlreadyFormatted(_) => print(".")
-    case Outcome.Rewritten(_)        => ()
+      s"Found a not formatted file: $path .\nAfter formatting:\n$formatted\n\n"
+    case Outcome.AlreadyFormatted(_) => "."
+    case Outcome.Rewritten(_)        => ""
   }
 
-  def readFile(path: Path): String =
-    String(Files.readAllBytes(path), StandardCharsets.UTF_8)
-
-  private def overwrite(file: File, content: String): Unit =
-    Files.write(file.toPath, content.getBytes(StandardCharsets.UTF_8))
+  // 2, as grep and most formatters use for a usage error, keeps 1 meaning "unformatted".
+  private def usage(help: Help): IO[ExitCode] =
+    if (help.errors.isEmpty) IO.println(help).as(ExitCode.Success)
+    else Console[IO].errorln(help).as(ExitCode(2))
 }
