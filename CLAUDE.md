@@ -53,8 +53,8 @@ back for seeing every failure at once.
 
 `sbt test` deliberately skips `SconfigDefectsSpec`. Those tests assert what sconfig *should* do,
 so they are red while the upstream bugs are open, and a permanently red CI teaches people to
-ignore it. `sbt libraryDefects` runs them on demand, on all three platforms — expect 11 failures on
-the JVM and Native and 12 on Scala.js, each naming an open bug. The exclusion is scoped to the `test` task in `build.sbt`, so `testOnly` still reaches them.
+ignore it. `sbt libraryDefects` runs them on demand, on all three platforms — expect 12 failures on
+the JVM and Native and 13 on Scala.js, each naming an open bug. The exclusion is scoped to the `test` task in `build.sbt`, so `testOnly` still reaches them.
 
 The entry point is `CmdApi`, an `IOApp`, declared as `cliJVM`'s `mainClass`.
 
@@ -155,6 +155,15 @@ Dropped rather than rendered, refused as `Refusal.LostComment`:
 - **A comment no field follows** — after the last field of a file or an object, or in a file of
   nothing but comments. sconfig attaches a comment to the field after it. A comment has no meaning
   to compare, so only the comment check notices.
+
+Dropped with its object, refused as `Refusal.LostInclude`:
+
+- **An include in an object a later definition of the key replaces** — `o { include "x.conf" }`
+  then `o : 5`. The include no longer mattered, but its text would vanish.
+
+Rendered without its braces, so it will not parse again:
+
+- **A one-field object holding a substitution, inside an array** — `a : [ { b : ${?X} } ]`.
 
 Scala.js only:
 
