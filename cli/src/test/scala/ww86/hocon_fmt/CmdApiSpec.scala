@@ -110,6 +110,18 @@ class CmdApiSpec extends munit.CatsEffectSuite {
     }
   }
 
+  // Examined twice, one file would be written by two fibers at once.
+  tmp.test("a file named twice, however spelled, is examined once") { dir =>
+    for {
+      file <- write(dir, "a.conf", unformatted)
+      run  <- rewrite(file, file, dir / "." / "a.conf")
+      text <- textOf(file)
+    } yield {
+      assertEquals(run.outcomes.size, 1, run.rendered)
+      assertEquals(text, formatted)
+    }
+  }
+
   test("arguments: files, with --check or -c") {
     assertEquals(
       CmdApi.command.parse(List("--check", "a.conf", "b.conf")),
