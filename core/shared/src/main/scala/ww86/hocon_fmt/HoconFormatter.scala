@@ -32,22 +32,28 @@ object HoconFormatter {
   /** Formatted text, or why the input was left alone. */
   def format(source: String): Either[Refusal, String] =
     for {
-      formatted <- attempt(formatOnce(source))(Refusal.NotHocon(_))
+      formatted <- formatOnce(source)(Refusal.NotHocon(_))
+      _         <- commentsKept(source, formatted)
       _         <- secondPassAgrees(formatted)
     } yield formatted
 
-  /** Kept separate from [[format]] so the check there can run another pass without recursing
-    * back through it. Throws for input that is not HOCON at all.
+  /** One parse-render round trip with the includes carried across, kept separate from [[format]]
+    * so the check there can run another pass without recursing back through it. `unreadable`
+    * names the refusal for text sconfig cannot parse: the input's fault on the first pass, the
+    * formatter's on the second.
     */
-  private def formatOnce(source: String): String = {
+  private def formatOnce(source: String)(unreadable: String => Refusal): Either[Refusal, String] = {
     val masked = IncludeMasking.mask(source)
-    val parsed = ConfigFactory.parseString(masked.text, parseOptions)
+    for {
+      rendered <- attempt(render(masked.text))(unreadable)
+      _        <- IncludeMasking.lost(rendered, masked.originals).headOption.map(Refusal.LostInclude(_)).toLeft(())
+    } yield IncludeMasking.unmask(rendered, masked.originals)
+  }
 
-    val rendered =
-      if (parsed.isEmpty) "" // rendering an empty root would produce "{}"
-      else parsed.root.render(renderOptions)
-
-    IncludeMasking.unmask(rendered, masked.originals)
+  private def render(masked: String): String = {
+    val parsed = ConfigFactory.parseString(masked, parseOptions)
+    if (parsed.isEmpty) "" // rendering an empty root would produce "{}"
+    else parsed.root.render(renderOptions)
   }
 
   /** Formatting the output again is the whole check. The CLI writes on success, so output that
@@ -60,9 +66,15 @@ object HoconFormatter {
     * whether the text is well formed and which sconfig cannot do at all on Scala.js.
     */
   private def secondPassAgrees(formatted: String): Either[Refusal, Unit] =
-    attempt(formatOnce(formatted))(Refusal.BrokenOutput(_))
+    formatOnce(formatted)(Refusal.BrokenOutput(_))
       .filterOrElse(_ == formatted, Refusal.UnstableOutput)
       .map(_ => ())
+
+  /** Every comment of the source, as many times as it occurs; the multiset difference names the
+    * first one missing.
+    */
+  private def commentsKept(source: String, formatted: String): Either[Refusal, Unit] =
+    HoconText.comments(source).diff(HoconText.comments(formatted)).headOption.map(Refusal.LostComment(_)).toLeft(())
 
   private def attempt[A](run: => A)(refusal: String => Refusal): Either[Refusal, A] =
     Try(run).toEither.left.map(e => refusal(Option(e.getMessage).getOrElse(e.toString)))

@@ -88,4 +88,42 @@ class IncludeDetectionSpec extends munit.FunSuite with HoconTestSupport {
     assert(out.contains("required"), out)
     assert(out.contains("b: 1"), out)
   }
+
+  // --- Comments are not code ----------------------------------------------------------------------
+  // Deciding what is inside a string once counted every quote from the start of the file, those in
+  // comments included, so one stray quote in a comment hid the next include. On the JVM sconfig then
+  // resolved that include against a missing file, and the directive silently vanished.
+
+  List("#", "//").foreach { marker =>
+    test(s"a quote in a $marker comment does not hide a later include") {
+      val out = formatted(s"$marker a 5\" pipe\ninclude \"other.conf\"\na : 1")
+      assert(out.contains("include \"other.conf\""), s"the include was lost: $out")
+    }
+
+    test(s"an include in a $marker comment is not a directive") {
+      val out = formatted(s"$marker include \"x.conf\"\na : 1")
+      assert(out.contains("include \"x.conf\""), out)
+      assert(!out.contains("__INCLUDE"), s"placeholder leaked into the output: $out")
+    }
+  }
+
+  // --- A later definition of the key ---------------------------------------------------------------
+  // sconfig merges repeated keys, so a later scalar replaces an earlier object and everything written
+  // in it. Found by FormatterPropertiesSpec: the include inside went with it, and no check noticed.
+
+  test("an include in an object a later definition replaces is not silently lost") {
+    format("o {\n  include \"x.conf\"\n  a : 1\n}\no : 5") match {
+      case Right(out)                   => assert(out.contains("include \"x.conf\""), s"the include was lost: $out")
+      case Left(Refusal.LostInclude(_)) => ()
+      case Left(other)                  => fail(s"refused for the wrong reason: ${other.reason}")
+    }
+  }
+
+  // --- Layout around a leading include -------------------------------------------------------------
+
+  List("""include "x.conf"""", """include required("x.conf")""").foreach { directive =>
+    test(s"an include on the first line gains no blank line above it: $directive") {
+      assertEquals(formatted(s"$directive\na : 1"), s"$directive\na: 1\n")
+    }
+  }
 }

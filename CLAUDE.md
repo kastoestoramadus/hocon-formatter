@@ -53,8 +53,8 @@ back for seeing every failure at once.
 
 `sbt test` deliberately skips `SconfigDefectsSpec`. Those tests assert what sconfig *should* do,
 so they are red while the upstream bugs are open, and a permanently red CI teaches people to
-ignore it. `sbt libraryDefects` runs them on demand — expect 9 failures today, each naming an open
-bug. The exclusion is scoped to the `test` task in `build.sbt`, so `testOnly` still reaches them.
+ignore it. `sbt libraryDefects` runs them on demand, on all three platforms — expect 13 failures on
+the JVM and Native and 14 on Scala.js, each naming an open bug. The exclusion is scoped to the `test` task in `build.sbt`, so `testOnly` still reaches them.
 
 The entry point is `CmdApi`, an `IOApp`, declared as `cliJVM`'s `mainClass`.
 
@@ -150,6 +150,26 @@ Mis-rendered rather than banner-wrapped:
   config-inheritance idiom, comes back as `e: ${g}name: east`. This is the one worth reporting
   upstream first: it is short, obviously wrong, and hits a very common pattern.
 
+Dropped rather than rendered, refused as `Refusal.LostComment`:
+
+- **A comment no field follows** — after the last field of a file or an object, or in a file of
+  nothing but comments. sconfig attaches a comment to the field after it. A comment has no meaning
+  to compare, so only the comment check notices.
+
+Dropped with its object, refused as `Refusal.LostInclude`:
+
+- **An include in an object a later definition of the key replaces** — `o { include "x.conf" }`
+  then `o : 5`. The include no longer mattered, but its text would vanish.
+
+Rendered without its braces, so it will not parse again:
+
+- **A one-field object inside an array that does not fit on one line** — holding a substitution,
+  `a : [ { b : ${?X} } ]`, or a comment when its field is an object, `a : [ { # x\n b.c : 1 } ]`.
+
+Scala.js only:
+
+- **An object nested 32 or more deep** renders as text that fails to parse ("empty path").
+
 Unimplemented on Scala.js:
 
 - **Parsing any text containing an `include`** throws `NotImplementedError` — sconfig's JS build
@@ -174,7 +194,9 @@ escape becomes the literal `A`).
 
 ## Tests
 
-Six suites, split by concern so a change answers to one place. Which module a suite lives in
+Seven suites, split by concern so a change answers to one place. `FormatterPropertiesSpec`
+(`core/shared`) checks the guarantees below on documents ScalaCheck generates: no comment,
+include or meaning lost, no placeholder leaked, nothing refused without reason. Which module a suite lives in
 follows from what it touches: anything reading files runs on the JVM and Scala Native, the rest
 is shared and runs on all three platforms.
 

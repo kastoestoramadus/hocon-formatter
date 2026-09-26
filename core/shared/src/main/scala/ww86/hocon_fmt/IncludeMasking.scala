@@ -2,6 +2,8 @@ package ww86.hocon_fmt
 
 import java.util.regex.{Matcher, Pattern}
 
+import scala.annotation.tailrec
+
 /** Carries `include` directives across a parse-render round trip.
   *
   * sconfig resolves an include while parsing and keeps nothing to render afterwards, so the
@@ -18,14 +20,15 @@ private[hocon_fmt] object IncludeMasking {
   case class Masked(text: String, originals: Map[Int, String])
 
   def mask(source: String): Masked = {
-    val masked     = new StringBuilder
-    val originals  = Map.newBuilder[Int, String]
-    val keywords   = IncludeKeyword.matcher(source)
-    var copiedUpTo = 0
-    var nextIndex  = 0
+    val masked       = new StringBuilder
+    val originals    = Map.newBuilder[Int, String]
+    val keywords     = IncludeKeyword.matcher(source)
+    lazy val nonCode = HoconText.spans(source) // only a file that mentions include pays for it
+    var copiedUpTo   = 0
+    var nextIndex    = 0
 
     while (keywords.find())
-      if (keywords.start >= copiedUpTo && !isInsideStringLiteral(source, keywords.start))
+      if (keywords.start >= copiedUpTo && HoconText.isCode(nonCode, keywords.start))
         targetAfterKeyword(source, keywords.end).foreach { target =>
           masked.append(source.substring(copiedUpTo, keywords.start))
           masked.append(placeholderFor(nextIndex))
@@ -46,11 +49,30 @@ private[hocon_fmt] object IncludeMasking {
       Option.when(sameIndex)(field.group(1).toInt).flatMap(originals.get)
     }
     // Own-line first: it consumes the newline and indentation, which the inline pattern leaves
-    // behind. The other order turns every guard on its own line into a blank one.
+    // behind. The other order turns every guard on its own line into a blank one. sconfig may
+    // render a guard on the very first line, with no newline before it, so one is lent for the
+    // pass; a multiline `^` would do instead, but Scala.js supports it only from ES2018.
     val ours                     = originals.keySet
     def dropOurs(guard: Matcher) = Option.when(ours(guard.group(1).toInt))("")
-    val withoutOwnLineGuards     = replaceEachMatch(restored, GuardOnItsOwnLine)(dropOurs)
+    val withoutOwnLineGuards     = replaceEachMatch("\n" + restored, GuardOnItsOwnLine)(dropOurs).drop(1)
     replaceEachMatch(withoutOwnLineGuards, GuardInline)(dropOurs)
+  }
+
+  /** The statements whose placeholder sconfig did not render, in source order. It drops a field
+    * the way it drops everything in an object that a later definition of the same key replaces.
+    */
+  def lost(rendered: String, originals: Map[Int, String]): List[String] = {
+    val matcher = PlaceholderField.matcher(rendered)
+    // Resumes one character past each match, as `replaceEachMatch` does, so a near miss cannot
+    // hide a placeholder that starts inside it.
+    @tailrec
+    def present(from: Int, found: Set[Int]): Set[Int] =
+      if (!matcher.find(from)) found
+      else {
+        val index = matcher.group(1)
+        present(matcher.start + 1, if (index == matcher.group(2)) found + index.toInt else found)
+      }
+    (originals.keySet -- present(0, Set.empty)).toList.sorted.map(originals)
   }
 
   // ---- placeholders --------------------------------------------------------------------------
@@ -170,22 +192,5 @@ private[hocon_fmt] object IncludeMasking {
         case _ => i += 1
       }
     None
-  }
-
-  /** Whether `position` falls inside a quoted or triple-quoted literal. */
-  private def isInsideStringLiteral(source: String, position: Int): Boolean = {
-    var inside = false
-    var i      = 0
-    while (i < position && i < source.length) {
-      if (source.charAt(i) == '"') {
-        val isTripleQuote =
-          i + 2 < source.length && source.charAt(i + 1) == '"' && source.charAt(i + 2) == '"'
-        val isEscaped = i > 0 && source.charAt(i - 1) == '\\'
-        if (isTripleQuote) { inside = !inside; i += 2 }
-        else if (!isEscaped) inside = !inside
-      }
-      i += 1
-    }
-    inside
   }
 }

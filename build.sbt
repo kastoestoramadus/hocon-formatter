@@ -9,6 +9,7 @@ val catsEffect      = "3.7.1"
 val fs2             = "3.14.0"
 val decline         = "2.6.2"
 val munitCatsEffect = "2.2.1"
+val munitScalaCheck = "1.2.0"
 
 ThisBuild / scalaVersion := scala3
 ThisBuild / version      := "0.1.0-SNAPSHOT"
@@ -76,7 +77,8 @@ lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
     name := "hocon-formatter-core",
     libraryDependencies ++= Seq(
       "org.ekrich"    %%% "sconfig" % sconfig,
-      "org.scalameta" %%% "munit"   % munit % Test
+      "org.scalameta" %%% "munit"            % munit            % Test,
+      "org.scalameta" %%% "munit-scalacheck" % munitScalaCheck  % Test
     ),
     // SconfigDefectsSpec asserts what sconfig *should* do, so it is red while those upstream bugs
     // are open. Scoped to the `test` task only, so `testOnly` can still run it on demand.
@@ -160,7 +162,11 @@ addCommandAlias(
     .map(p => s"${p.id}/Test/compile")
     .mkString("; ")
 )
-addCommandAlias("libraryDefects", "coreJVM/testOnly ww86.hocon_fmt.SconfigDefectsSpec")
+// On every platform: sconfig's Scala.js and Scala Native builds have defects of their own.
+addCommandAlias(
+  "libraryDefects",
+  Seq(coreJVM, coreJS, coreNative).map(p => s"${p.id}/testOnly ww86.hocon_fmt.SconfigDefectsSpec").mkString("; ")
+)
 
 /** Timings of each formatter phase on each platform; see `scripts/bench.py`. Not published. The
   * mutable loop in `Bench.measure` is deliberate: an allocation-free timing loop is the one place
