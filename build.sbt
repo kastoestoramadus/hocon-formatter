@@ -157,6 +157,8 @@ lazy val cliJVM    = cli.jvm
 lazy val cliJS     = cli.js
 lazy val cliNative = cli.native
 
+val bundle = taskKey[File]("The playground's script: the optimised web module under a licence banner.")
+
 /** The formatter as a script for web pages, behind the playground: one global, `HoconFormatter`,
   * with a small JavaScript API; see docs/playground.md. A classic script rather than an ES module,
   * so a page that loads it works from `file://` as well.
@@ -176,7 +178,16 @@ lazy val web = project
     buildInfoPackage := "ww86.hocon_fmt.web",
     buildInfoKeys    := Seq[BuildInfoKey](version),
     // The tests run the optimised script a page loads, where only exported names survive.
-    Test / scalaJSStage := FullOptStage
+    Test / scalaJSStage := FullOptStage,
+    Seq(Compile, Test).map(_ / fullLinkJS / scalaJSLinkerConfig ~= (_.withClosureCompilerIfAvailable(true))),
+    bundle := {
+      val linked = (Compile / fullLinkJSOutput).value / "main.js"
+      val script = target.value / "bundle" / "hocon-formatter.js"
+      // The source map is not shipped, so neither is the comment that points to it.
+      val code = IO.readLines(linked).filterNot(_.startsWith("//# sourceMappingURL=")).mkString("\n")
+      IO.write(script, s"/*! hocon-formatter ${version.value} | GPL-3.0 | ${homepage.value.get} */\n$code\n")
+      script
+    }
   )
 
 addCommandAlias(
