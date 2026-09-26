@@ -14,7 +14,7 @@ do not treat it as a source of truth.
 ## Commands
 
 ```bash
-sbt test                                        # every runtime: coreJVM, cli, coreJS, coreNative
+sbt test                                        # core and cli on the JVM, Scala.js, Scala Native
 sbt crossCompile                                # compile only, no Node or clang needed
 sbt coreJS/test                                 # the Scala.js half on its own
 sbt libraryDefects                              # the red sconfig-bug tests
@@ -24,8 +24,10 @@ sbt "coreJVM/testOnly ww86.hocon_fmt.HoconFormatterInvariantsSpec -- *idempotent
 sbt scalafmtAll                                 # apply formatting
 sbt scalafmtCheckAll                            # verify formatting (CI runs this)
 
-sbt "cli/runMain ww86.hocon_fmt.CmdApi --check path/to/file.conf"   # report without writing
-sbt "cli/runMain ww86.hocon_fmt.CmdApi path/to/file.conf"           # rewrite in place
+sbt "cliJVM/run --check path/to/file.conf"      # report without writing
+sbt "cliJVM/run path/to/file.conf"              # rewrite in place
+sbt cliNative/nativeLink                        # cli/.native/target/scala-3.8.2/hocon-formatter
+sbt cliJS/fullLinkJS                            # a CommonJS bundle for Node
 
 UPDATE_GOLDEN=1 sbt "coreJVM/testOnly ww86.hocon_fmt.GoldenFileSpec"   # rewrite expected files
 ```
@@ -35,9 +37,8 @@ clang`). Without them the Scala.js or Scala Native half fails to start rather th
 which is deliberate: a silently skipped platform is how a port rots. `sbt crossCompile` checks that
 everything still compiles without needing either.
 
-It runs the four projects in a fixed order — core on the JVM, cli, core on Scala.js, core on Scala
-Native — each under
-its own `==========` banner. sbt otherwise runs aggregated projects concurrently and prints an
+It runs the six projects in a fixed order — core and cli on the JVM, then on Scala.js, then on
+Scala Native — each under its own `==========` banner. sbt otherwise runs aggregated projects concurrently and prints an
 unlabelled `Passed: Total N` for each, with the Scala.js block arriving without the `[info]`
 prefix, so there is no way to tell which runtime produced which result. The cost of ordering them
 is that the run stops at the first project that fails, so a JVM failure hides any Scala.js one
@@ -49,7 +50,7 @@ so they are red while the upstream bugs are open, and a permanently red CI teach
 ignore it. `sbt libraryDefects` runs them on demand — expect 9 failures today, each naming an open
 bug. The exclusion is scoped to the `test` task in `build.sbt`, so `testOnly` still reaches them.
 
-The entry point is `CmdApi.main`, declared as the `cli` module's `mainClass`.
+The entry point is `CmdApi`, an `IOApp`, declared as `cliJVM`'s `mainClass`.
 
 ## Architecture
 
@@ -66,8 +67,10 @@ Two modules, split along what Scala.js can run:
   refuse anything it cannot read back, as `Either[Refusal, String]`. `Verdict` decides what
   happens to one file's bytes, decoding them strictly as UTF-8; every caller acts on it, and
   `JvmFacade` offers it in JDK types. `IncludeMasking` is the include round-trip machinery.
-- **`cli`** (JVM only) — `CmdApi`: scopt argument parsing, file reading and writing, parallel
-  processing. Everything Scala.js cannot do lives here, which is what keeps `core` portable.
+- **`cli`** (`crossProject(JVMPlatform, JSPlatform, NativePlatform)`) — `CmdApi`, on cats-effect:
+  decline argument parsing, fs2-io file reading and writing on the JVM, Node and Native, parallel
+  processing. Effects live here, which is what keeps `core` pure and portable. A usage error
+  exits 2, so 1 keeps meaning "unformatted".
 
 Scala Native runs `java.util.regex` on RE2, which rejects lookaround, backreferences, possessive
 quantifiers and `\G` `\R` `\Z`, so every pattern in `IncludeMasking` must stay within it; the
@@ -187,8 +190,8 @@ is shared and runs on all three platforms.
   design and excluded from `sbt test`; run with `sbt libraryDefects`. Every test is
   named `library:`; tests that go through our pipeline are named `formatter:`. The split records
   who is responsible for a failure, so nobody tries to fix an upstream bug in this repo.
-- **`CmdApiSpec`** (`cli`) — CLI behaviour on temp files: exit codes, that every file is examined, and that
-  a file the formatter cannot handle is never overwritten.
+- **`CmdApiSpec`** (`cli`, every platform) — CLI behaviour on temp files: exit codes, that every
+  file is examined, and that a file the formatter cannot handle is never overwritten.
 
 Meaning preservation is asserted only on include-free inputs: `test01.conf` contains
 `include required("test01a")` pointing at a file that does not exist, so the raw input cannot be
