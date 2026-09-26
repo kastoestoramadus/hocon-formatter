@@ -9,7 +9,7 @@ Each has a **failing** test in `SconfigDefectsSpec` asserting what sconfig ought
 expected text is not guessed: each case is paired with a plainly written config that means the same
 thing and renders correctly, and the test first asserts both `resolve()` to the same value. A
 failure therefore prints a diff ready to paste into an upstream issue. Run them with
-`sbt libraryDefects`, on all three platforms: 12 failures on the JVM and Native, 13 on Scala.js. When a
+`sbt libraryDefects`, on all three platforms: 13 failures on the JVM and Native, 14 on Scala.js. When a
 sconfig release fixes one, its test turns green: that is the signal to drop the refusal and the
 entry below. sconfig 2.0.0 was tried on 2026-09-25: the regular suites pass on it, and the nine
 defects then known remain.
@@ -24,8 +24,9 @@ Rendered as text that will not parse again (`Refusal.BrokenOutput`):
 - **Object concatenation with a substitution**: `e = ${g} { name = "east" }`, the ordinary
   config-inheritance idiom, which sconfig renders as `e: ${g}name: east`. The one worth reporting
   upstream first: short, obviously wrong, and common.
-- **A one-field object holding a substitution, inside an array**: `a : [ { b : ${?X} } ]` loses
-  its braces and renders as `a: [ b: ${?X} ]`. Two fields, or no substitution, keep them.
+- **A one-field object inside an array that does not fit on one line** loses its braces: holding
+  a substitution, `a : [ { b : ${?X} } ]` renders as `a: [ b: ${?X} ]`; so does one whose field is
+  an object and that holds a comment. Two fields, or a field that fits on one line, keep them.
 
 Rendered without a comment (`Refusal.LostComment`); a comment has no meaning to compare, so only
 this check notices:

@@ -30,8 +30,9 @@ searches deeper. A failure prints the document and the seed that reproduces it.
 
 They found what no example covered: a quote inside a comment hid the next include, which on the
 JVM then vanished; a comment with no field after it was dropped; an include in an object that a
-later definition replaces vanished with it, after 11356 documents; and a one-field object holding
-a substitution inside an array loses its braces in sconfig.
+later definition replaces vanished with it, after 11356 documents; and, in sconfig, a one-field
+object inside an array loses its braces when it does not fit on one line, which one CI run turned
+up after 859 documents.
 
 ## Benchmarks
 
