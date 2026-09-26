@@ -1,7 +1,7 @@
 name: Release
 
-# A version tag builds the native binaries, their wheels and the npm package and attaches them to
-# a GitHub release. Run by hand, it builds the same artifacts without releasing anything, which is
+# A version tag builds the native binaries, their wheels, the npm package and the web script and
+# attaches them to a GitHub release. Run by hand, it builds the same artifacts without releasing anything, which is
 # how to try the matrix before tagging. Publishing to Maven Central, PyPI, npm and the Gradle Plugin
 # Portal needs credentials this repository does not hold yet, so it is not automated here.
 on:
@@ -69,9 +69,26 @@ jobs:
           name: npm-package
           path: hocon-formatter-*.tgz
 
+  # The playground's script, fetched by release so a page pins the formatter it runs.
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: sbt
+      - uses: sbt/setup-sbt@v1
+      - run: sbt web/bundle
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-script
+          path: web/target/bundle/hocon-formatter.js
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [native, npm]
+    needs: [native, npm, web]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -80,4 +97,4 @@ jobs:
       - name: Attach to the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --generate-notes hocon-formatter-* hocon_formatter-*.whl
+        run: gh release create "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --generate-notes hocon-formatter-* hocon_formatter-*.whl hocon-formatter.js
