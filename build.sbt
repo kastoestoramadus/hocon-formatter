@@ -168,6 +168,8 @@ lazy val sbtPlugin = project
       "scalaVersion" -> (coreJVM / scalaVersion).value
     ),
     scriptedLaunchOpts += s"-Dplugin.version=${version.value}",
+    // The tests read sbt's logs; on CI, sbt colours them, and the escape codes hide `[warn]`.
+    scriptedLaunchOpts += "-Dsbt.log.noformat=true",
     // The plugin fetches the core by its coordinates, so scripted needs it published first.
     scriptedDependencies := scriptedDependencies.dependsOn(coreJVM / publishLocal).value
   )
