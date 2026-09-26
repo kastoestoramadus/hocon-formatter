@@ -134,6 +134,22 @@ lazy val cli = crossProject(JVMPlatform, JSPlatform, NativePlatform)
     Test / nativeConfig ~= { _.withMode(Mode.debug).withLTO(LTO.none) }
   )
 
+val npmPackage = taskKey[File]("Assembles the npm package: the linked CLI and its package.json.")
+
+cliJS / npmPackage := {
+  val linked  = (cliJS / Compile / fullLinkJSOutput).value / "main.js"
+  val staging = (cliJS / target).value / "npm-package"
+  IO.delete(staging)
+  IO.copyDirectory(file("npm"), staging)
+  // npm links `bin` entries as executables, which needs the shebang to pick Node.
+  val cli = staging / "hocon-formatter.js"
+  IO.write(cli, "#!/usr/bin/env node\n" + IO.read(linked))
+  cli.setExecutable(true)
+  val manifest = staging / "package.json"
+  IO.write(manifest, IO.read(manifest).replace(""""version": "0.0.0"""", s""""version": "${version.value}""""))
+  staging
+}
+
 lazy val cliJVM    = cli.jvm
 lazy val cliJS     = cli.js
 lazy val cliNative = cli.native
