@@ -133,7 +133,8 @@ def report(args) -> None:
     history = [(c, medians(c, host)) for c in reversed(commits)]
     keys = sorted({k for _, m in history for k in m if k[2] in args.phases})
 
-    print(f"median ms, machine {host}; change against the previous measured commit, ! over {args.threshold:.0%}")
+    print(f"median ms, machine {host}; change against the previous measured commit, "
+          f"! over {args.threshold:.0%} and {args.min_ms} ms")
     print("".ljust(30) + "".join(f"{c[:8]:>18}" for c, _ in history))
     regressions = []
     for key in keys:
@@ -144,7 +145,8 @@ def report(args) -> None:
                 cells.append("-".rjust(18))
                 continue
             change = "" if before is None else f" {value / before - 1:+.0%}"
-            slower = before is not None and value > before * (1 + args.threshold)
+            # Relative change alone flags noise on phases that take microseconds.
+            slower = before is not None and value > before * (1 + args.threshold) and value - before > args.min_ms * 1000
             if slower:
                 regressions.append((commit, key, before, value))
             cells.append(f"{value / 1000:.2f}{change}{' !' if slower else '  '}".rjust(18))
@@ -172,6 +174,7 @@ def main() -> None:
     report_parser.add_argument("--commits", type=int, default=10)
     report_parser.add_argument("--phases", nargs="+", default=["format", "cli-check"])
     report_parser.add_argument("--threshold", type=float, default=0.15)
+    report_parser.add_argument("--min-ms", type=float, default=0.05, help="ignore smaller slowdowns")
     report_parser.add_argument("--fail", action="store_true", help="exit 1 on a slowdown")
     report_parser.set_defaults(action=report)
     args = parser.parse_args()
