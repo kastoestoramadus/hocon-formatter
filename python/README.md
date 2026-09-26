@@ -6,5 +6,5 @@ left untouched.
 
 This wheel carries the native binary and nothing else: installing it puts `hocon-formatter` on
 your PATH. It exists mainly for the project's pre-commit hooks. The same tool ships on npm and as
-sbt, Gradle and Maven plugins; see the
+sbt, Gradle, Maven and Mill plugins; see the
 [project page](https://github.com/kastoestoramadus/hocon-formatter).

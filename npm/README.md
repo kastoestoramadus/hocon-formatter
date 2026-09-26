@@ -9,5 +9,5 @@ npx hocon-formatter --check src/main/resources/application.conf
 ```
 
 This package is the Scala.js build of the command line tool; the same tool ships as a native
-binary and as sbt, Gradle and Maven plugins. See the
+binary and as sbt, Gradle, Maven and Mill plugins. See the
 [project page](https://github.com/kastoestoramadus/hocon-formatter).
