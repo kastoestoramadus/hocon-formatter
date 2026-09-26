@@ -1,5 +1,7 @@
 package ww86.hocon_fmt
 
+import ww86.hocon_fmt.HoconFormatter.format
+
 /** Coverage of the HOCON specification, as seen through `HoconFormatter.format`.
   *
   * Everything here exercises our pipeline, so every test is named `formatter:`. Where the
@@ -51,6 +53,28 @@ class HoconSpecCoverageSpec extends munit.FunSuite with HoconTestSupport {
     test(s"formatter: refuses output that is not a fixed point: $name") {
       assert(raw.parses.isSuccess, s"the fixture itself must be valid HOCON: $raw")
       assertEquals(refusalOf(raw), Refusal.UnstableOutput, s"$name: refused for the wrong reason")
+    }
+  }
+
+  // --- Never lose a comment -------------------------------------------------------------------
+  // A comment carries no meaning to compare, so neither the re-parse nor the fixed-point check can
+  // notice one going missing. sconfig drops a comment that no field follows (see
+  // SconfigDefectsSpec), so these must either keep every comment or be refused.
+
+  val commentsOnly = Map(
+    "after the last field"             -> ("a : 1\n# trailing", List("trailing")),
+    "last in an object"                -> ("o {\n  a : 1\n  # last in the object\n}", List("last in the object")),
+    "a file of nothing but comments"   -> ("# one\n// two\n", List("one", "two")),
+    "after the last field, // comment" -> ("a : 1\n// trailing", List("trailing"))
+  )
+
+  commentsOnly.foreach { case (name, (raw, comments)) =>
+    test(s"formatter: never loses a comment: $name") {
+      format(raw) match {
+        case Right(out)                   => comments.foreach(c => assert(out.contains(c), s"comment [$c] lost from: $out"))
+        case Left(Refusal.LostComment(_)) => ()
+        case Left(other)                  => fail(s"refused for the wrong reason: ${other.reason}")
+      }
     }
   }
 
