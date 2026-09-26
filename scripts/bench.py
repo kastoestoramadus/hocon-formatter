@@ -132,24 +132,29 @@ def report(args) -> None:
         sys.exit(f"no benchmark notes on the last {args.commits} commits; run `scripts/bench.py run`")
     history = [(c, medians(c, host)) for c in reversed(commits)]
     keys = sorted({k for _, m in history for k in m if k[2] in args.phases})
-    subjects = {c: git("log", "-1", "--format=%h %s", c).strip()[:60] for c in commits}
 
-    print(f"median ms per commit, machine {host}; ! marks a slowdown over {args.threshold:.0%}")
-    print("commit".ljust(62) + "".join(f"{'/'.join(k):>28}" for k in keys))
+    print(f"median ms, machine {host}; change against the previous measured commit, ! over {args.threshold:.0%}")
+    print("".ljust(30) + "".join(f"{c[:8]:>18}" for c, _ in history))
     regressions = []
-    previous: dict = {}
-    for commit, values in history:
-        cells = []
-        for k in keys:
-            value, before = values.get(k), previous.get(k)
-            slower = value is not None and before is not None and value > before * (1 + args.threshold)
+    for key in keys:
+        cells, before = [], None
+        for commit, values in history:
+            value = values.get(key)
+            if value is None:
+                cells.append("-".rjust(18))
+                continue
+            change = "" if before is None else f" {value / before - 1:+.0%}"
+            slower = before is not None and value > before * (1 + args.threshold)
             if slower:
-                regressions.append((subjects[commit], k, before, value))
-            cells.append(f"{'-' if value is None else f'{value / 1000:.2f}'}{' !' if slower else '  '}".rjust(28))
-        previous.update(values)
-        print(subjects[commit].ljust(62) + "".join(cells))
-    for subject, key, before, after in regressions:
-        print(f"slower: {'/'.join(key)} {before / 1000:.2f} -> {after / 1000:.2f} ms at {subject}")
+                regressions.append((commit, key, before, value))
+            cells.append(f"{value / 1000:.2f}{change}{' !' if slower else '  '}".rjust(18))
+            before = value
+        print("/".join(key).ljust(30) + "".join(cells))
+    print()
+    for commit, _ in history:
+        print(git("log", "-1", "--format=%h  %s", commit).strip())
+    for commit, key, before, after in regressions:
+        print(f"slower: {'/'.join(key)} {before / 1000:.2f} -> {after / 1000:.2f} ms at {commit[:8]}")
     if regressions and args.fail:
         sys.exit(1)
 
